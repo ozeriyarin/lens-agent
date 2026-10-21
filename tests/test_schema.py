@@ -1,0 +1,71 @@
+"""Schema tests (constitution V). The schema is a contract, so we test the
+boundaries: what must be rejected, not only what is accepted."""
+
+import pytest
+from pydantic import ValidationError
+
+from app.schema import BBox, DetectedObject, Estimate, PersonDetails, ScanResult
+
+
+def test_minimal_object_is_valid():
+    obj = DetectedObject(label="mug", category="furniture", confidence=0.9)
+    assert obj.position == "unknown"
+    assert obj.bbox is None and obj.person is None
+
+
+def test_confidence_must_be_between_0_and_1():
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="other", confidence=1.4)
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="other", confidence=-0.1)
+
+
+def test_unknown_category_is_rejected():
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="kitchenware", confidence=0.5)
+
+
+def test_empty_label_is_rejected():
+    with pytest.raises(ValidationError):
+        DetectedObject(label="", category="other", confidence=0.5)
+
+
+def test_bbox_must_stay_inside_frame():
+    BBox(x=0.5, y=0.5, w=0.5, h=0.5)  # touches the edge: fine
+    with pytest.raises(ValidationError):
+        BBox(x=0.6, y=0.0, w=0.5, h=0.5)
+    with pytest.raises(ValidationError):
+        BBox(x=0.0, y=0.0, w=0.0, h=0.5)  # zero width
+
+
+def test_person_details_require_person_category():
+    details = PersonDetails(mood=Estimate(value="happy", confidence=0.6))
+    DetectedObject(label="man", category="person", confidence=0.9, person=details)
+    with pytest.raises(ValidationError):
+        DetectedObject(label="dog", category="animal", confidence=0.9, person=details)
+
+
+def test_scan_result_empty_means_nothing_identifiable():
+    result = ScanResult(objects=[], scene="blurry wall")
+    assert result.is_empty
+
+
+def test_scan_result_round_trips_through_json():
+    result = ScanResult(
+        scene="desk with a laptop and a mug",
+        objects=[
+            DetectedObject(label="laptop", category="electronics", position="on_table", confidence=0.95,
+                           bbox=BBox(x=0.1, y=0.2, w=0.5, h=0.4)),
+            DetectedObject(label="mug", category="other", position="on_table", confidence=0.8),
+        ],
+    )
+    restored = ScanResult.model_validate_json(result.model_dump_json())
+    assert restored == result
+    assert [o.label for o in restored.objects] == ["laptop", "mug"]
+
+
+def test_json_schema_is_exportable():
+    # Pydantic AI sends this schema to the model as the required output shape.
+    schema = ScanResult.model_json_schema()
+    assert "objects" in schema["properties"]
+    assert schema["$defs"]["DetectedObject"]["properties"]["category"]["enum"][0] == "person"
