@@ -8,4 +8,4 @@
 - [x] T6 PWA: camera, scan button, question box, result cards (static/index.html)
 - [ ] T7 Run locally with a real key, scan a desk, verify ledger rows
 - [ ] T8 Tunnel to phone over HTTPS, verify camera works on mobile
-- [ ] T9 Write README "how to run" from a clean machine
+- [x] T9 Write README "how to run" from a clean machine
