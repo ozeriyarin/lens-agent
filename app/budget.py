@@ -39,6 +39,7 @@ from typing import Literal
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "google:gemini-2.5-flash": (0.30, 2.50),
     "anthropic:claude-haiku-4-5": (1.00, 5.00),
+    "google:gemini-embedding-001": (0.15, 0.0),  # text embeddings (feature 004); free tier exists
 }
 # Unknown model string -> assume the most expensive tier we know. Refusing a
 # call we could afford is a recoverable mistake; overspending is not.
@@ -55,8 +56,10 @@ SCAN_ESTIMATE_TOKENS = {"input_tokens": 2000, "output_tokens": 600}
 Status = Literal["reserved", "settled", "failed"]
 
 # primary: the cheap first call. escalation: the second-tier call feature 002
-# makes when the primary result was weak. Lets /stats count escalations.
-Tier = Literal["primary", "escalation"]
+# makes when the primary result was weak. embedding: feature 004's memory call.
+# Lets /stats count escalations and keep scan counts honest.
+Tier = Literal["primary", "escalation", "embedding"]
+_TIERS = ("primary", "escalation", "embedding")
 
 # tap: the person pressed Scan. live: feature 003's loop sent the frame.
 # Live frames are the volume driver, so stats and evals want to tell them apart.
@@ -146,18 +149,41 @@ class Budget:
                     cost_usd      REAL NOT NULL,
                     latency_ms    INTEGER NOT NULL,
                     status        TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'failed')),
-                    tier          TEXT NOT NULL DEFAULT 'primary' CHECK (tier IN ('primary', 'escalation')),
+                    tier          TEXT NOT NULL DEFAULT 'primary' CHECK (tier IN ('primary', 'escalation', 'embedding')),
                     source        TEXT NOT NULL DEFAULT 'tap' CHECK (source IN ('tap', 'live'))
                 )
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS spend_ts ON spend(ts)")
-            # Older ledgers predate these columns: add them in place (001 -> tier, 002 -> source).
-            cols = {row[1] for row in conn.execute("PRAGMA table_info(spend)")}
-            if "tier" not in cols:
-                conn.execute("ALTER TABLE spend ADD COLUMN tier TEXT NOT NULL DEFAULT 'primary'")
-            if "source" not in cols:
-                conn.execute("ALTER TABLE spend ADD COLUMN source TEXT NOT NULL DEFAULT 'tap'")
+            self._migrate(conn)
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """Bring ledgers from earlier features up to date, in place.
+
+        001 -> tier column, 002 -> source column (ALTER ADD COLUMN). 004 -> the tier CHECK
+        must accept 'embedding'; SQLite cannot alter a CHECK, so the table is rebuilt once.
+        """
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(spend)")}
+        if "tier" not in cols:
+            conn.execute("ALTER TABLE spend ADD COLUMN tier TEXT NOT NULL DEFAULT 'primary'")
+        if "source" not in cols:
+            conn.execute("ALTER TABLE spend ADD COLUMN source TEXT NOT NULL DEFAULT 'tap'")
+        ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'spend'").fetchone()[0]
+        if "'embedding'" not in ddl:
+            conn.execute("BEGIN")
+            conn.execute(
+                "CREATE TABLE spend_new (request_id TEXT PRIMARY KEY, ts TEXT NOT NULL, model TEXT NOT NULL, "
+                "input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, cost_usd REAL NOT NULL, "
+                "latency_ms INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'failed')), "
+                "tier TEXT NOT NULL DEFAULT 'primary' CHECK (tier IN ('primary', 'escalation', 'embedding')), "
+                "source TEXT NOT NULL DEFAULT 'tap' CHECK (source IN ('tap', 'live')))"
+            )
+            conn.execute(f"INSERT INTO spend_new ({_COLUMNS}) SELECT {_COLUMNS} FROM spend")
+            conn.execute("DROP TABLE spend")
+            conn.execute("ALTER TABLE spend_new RENAME TO spend")
+            conn.execute("CREATE INDEX IF NOT EXISTS spend_ts ON spend(ts)")
+            conn.execute("COMMIT")
 
     def _connect(self) -> sqlite3.Connection:
         # isolation_level=None: we issue BEGIN/COMMIT ourselves where it matters.

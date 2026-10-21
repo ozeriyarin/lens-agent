@@ -18,6 +18,7 @@ Design choices:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -110,11 +111,22 @@ class DetectedObject(BaseModel):
     bbox: BBox | None = Field(default=None, description="Alternative to box_2d: normalized x,y,w,h. Leave empty if box_2d is given.")
     person: PersonDetails | None = None
     answer: str | None = Field(default=None, description="Answer to the user's question, if it concerns this object")
+    # Feature 004: what makes THIS object different from others of its kind. Embedded as text
+    # and matched against remembered entities. Never for people (constitution IV).
+    identity: str | None = Field(
+        default=None,
+        max_length=160,
+        description="Distinguishing details of this specific object: colour, material, brand, pattern, "
+                    "visible text, damage. E.g. 'white ceramic mug, blue rim, chipped handle'. "
+                    "Omit for people.",
+    )
 
     @model_validator(mode="after")
     def _person_details_only_for_people(self) -> "DetectedObject":
         if self.person is not None and self.category != "person":
             raise ValueError("person details are only allowed when category == 'person'")
+        if self.category == "person":
+            self.identity = None  # people are never remembered as identities
         return self
 
     @model_validator(mode="after")
@@ -143,6 +155,17 @@ class ScanResult(BaseModel):
         return not self.objects
 
 
+class EntityRef(BaseModel):
+    """What memory (feature 004) knows about one detected object, aligned with result.objects."""
+
+    id: str
+    known: bool = Field(description="True when this detection was linked to an entity seen before")
+    sightings: int = Field(ge=1)
+    first_seen: datetime
+    last_seen: datetime
+    identity: str
+
+
 class ScanResponse(BaseModel):
     """What `POST /scan` returns: the agent's result plus what the call cost us.
 
@@ -150,6 +173,8 @@ class ScanResponse(BaseModel):
     cost is then 0 and `request_id` is the id of the original paid scan.
     `escalated=True` (feature 002) means the primary model's result was weak and
     `result` comes from `model`, the escalation tier; `cost_usd` then covers both calls.
+    `entities` (feature 004) has one entry per object in `result.objects`, None where
+    memory could not or did not link it (people, no identity, memory off).
     """
 
     result: ScanResult
@@ -160,3 +185,4 @@ class ScanResponse(BaseModel):
     escalated: bool = False
     cost_usd: float = Field(ge=0)
     latency_ms: int = Field(ge=0)
+    entities: list[EntityRef | None] = Field(default_factory=list)

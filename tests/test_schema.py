@@ -102,3 +102,24 @@ def test_explicit_bbox_wins_over_box_2d():
     obj = DetectedObject(label="mug", category="other", confidence=0.9, box_2d=[0, 0, 1000, 1000],
                          bbox=BBox(x=0.1, y=0.1, w=0.2, h=0.2))
     assert obj.bbox.w == 0.2
+
+
+def test_identity_is_kept_for_objects_and_dropped_for_people():
+    mug = DetectedObject(label="mug", category="other", confidence=0.9, identity="white ceramic mug, blue rim")
+    assert mug.identity == "white ceramic mug, blue rim"
+    person = DetectedObject(label="man", category="person", confidence=0.9, identity="tall man in a red coat")
+    assert person.identity is None  # people are never remembered as identities
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="other", confidence=0.9, identity="x" * 161)
+
+
+def test_scan_response_entities_align_with_objects():
+    from datetime import datetime, timezone
+
+    from app.schema import EntityRef, ScanResponse
+
+    now = datetime.now(timezone.utc)
+    r = ScanResponse(result=ScanResult(scene="s", objects=[DetectedObject(label="mug", category="other", confidence=0.9)]),
+                     cached=False, request_id="r", model="m", primary_model="m", cost_usd=0, latency_ms=0,
+                     entities=[EntityRef(id="e1", known=True, sightings=3, first_seen=now, last_seen=now, identity="white mug")])
+    assert r.entities[0].known and r.model_dump()["entities"][0]["sightings"] == 3

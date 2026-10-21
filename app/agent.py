@@ -49,6 +49,10 @@ Rules:
   A box for the right half of the image is [0, 500, 1000, 1000]. Leave `bbox` empty.
 - For a person, fill `person.mood` and `person.age_range` as *estimates with a
   confidence*. Never state them as facts. Do not try to identify who the person is.
+- `identity`: for every object that is not a person, a short phrase with what makes THIS
+  one different from others of its kind: colour, material, brand or text you can read,
+  pattern, damage. "white ceramic mug with a blue rim and a chipped handle", "black Logitech
+  mouse, worn left button", "Heineken 330 ml green bottle". Not just the label again.
 - `scene` is one plain sentence describing the whole picture.
 - If the user asked a question: answer it in `answer` on the object it concerns,
   or in the top-level `answer` if it is about the whole scene. If you cannot tell
@@ -123,24 +127,33 @@ LIVE_HINT = (
 )
 
 
-def _prompt(frame: PreparedFrame, question: str | None, brief: bool = False) -> list[str | BinaryContent]:
+MAX_CONTEXT_CHARS = 800
+
+
+def _prompt(frame: PreparedFrame, question: str | None, brief: bool = False,
+            context: str | None = None) -> list[str | BinaryContent]:
     text = "Describe the objects in this photo."
     if question and question.strip():
         text += f" The user also asks: {question.strip()[:MAX_QUESTION_CHARS]}"
+        if context:
+            # Feature 004: what memory knows about recently seen objects, so questions like
+            # "have you seen this before?" can be answered. Only sent with a question.
+            text += f" Objects you remember seeing recently: {context[:MAX_CONTEXT_CHARS]}."
     if brief:
         text += LIVE_HINT
     return [text, BinaryContent(data=frame.jpeg, media_type=frame.media_type)]
 
 
 async def scan(
-    agent: Agent[None, ScanResult], frame: PreparedFrame, question: str | None = None, *, brief: bool = False
+    agent: Agent[None, ScanResult], frame: PreparedFrame, question: str | None = None, *, brief: bool = False,
+    context: str | None = None,
 ) -> ScanOutcome:
     """Run the agent on one prepared frame. Raises AgentFailed on malformed output.
-    `brief` (live mode) asks for a shorter result: fewer objects, shorter scene text."""
+    `brief` (live mode) asks for a shorter result; `context` is memory's summary (004)."""
     started = time.perf_counter()
     usage = RunUsage()  # passed in so we still have the numbers if the run raises
     try:
-        run = await agent.run(_prompt(frame, question, brief), usage_limits=SCAN_USAGE_LIMITS, usage=usage)
+        run = await agent.run(_prompt(frame, question, brief, context), usage_limits=SCAN_USAGE_LIMITS, usage=usage)
     except Exception as e:
         # Any failure after the request went out (schema retries exhausted, usage limit,
         # provider 5xx on the retry, transport error) must carry the tokens already spent,
