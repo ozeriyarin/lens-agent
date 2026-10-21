@@ -28,9 +28,9 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 - Budget: ≤ 5 USD/month total.
 
 ## Roadmap (one Spec Kit feature each)
-- **001 scan-frame** — tap to scan, typed objects, dedupe gate, budget guard, cost log. *(spec drafted in specs/001-scan-frame/)*
-- 002 budget + dedupe hardening, `/stats` endpoint, provider spend limit documented
-- 003 live mode + overlays — frame every 1–2 s, gate drops unchanged scenes, bbox overlays on `<canvas>`; optional tiny YOLO for tight boxes
+- **001 scan-frame** — tap to scan, typed objects, dedupe gate, budget guard, cost log. *(done 2026-10-21)*
+- **002 smart-routing** — Gemini first, escalate to Haiku on weak results or unanswered questions; calibrated estimates from the ledger; per-model stats + panel in the page; provider spend limits documented. *(spec in specs/002-smart-routing/)*
+- 003 live mode + overlays — frame every 1–2 s, gate drops unchanged scenes, bbox overlays on `<canvas>` **with the detection data (label, confidence, person estimates) drawn on the frame itself**; optional tiny YOLO for tight boxes
 - 004 entity memory — vector store of seen entities, "same mug as yesterday"
 - 005 RAG tool — `lookup(label)` over a small knowledge base
 - 006 evals — 50 labeled photos, scored on every prompt/model change
@@ -38,6 +38,7 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 - 008 Raspberry Pi client (optional)
 
 ## How to work in this repo
+0. Solo repo: commit straight to `main`, no feature branches or PRs (decided 2026-10-21). Tests green before every commit. Each feature still gets `specs/NNN-name/` and a closing commit that marks the spec Done.
 1. If Spec Kit commands are missing: `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` then `specify init --here --integration claude --script ps` (keep existing files). Already done once on 2026-10-21; commands live in `.claude/skills/speckit-*`.
 2. `/speckit-constitution` — use `.specify/memory/constitution.md` as the input; keep its principles.
 3. `/speckit-specify` for feature 001 — use `specs/001-scan-frame/spec.md` as the draft.
