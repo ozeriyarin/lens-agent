@@ -31,11 +31,18 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from app.agent import MAX_QUESTION_CHARS, AgentFailed, build_agent, scan
-from app.budget import Budget, BudgetExceeded, SpendEntry, estimate_scan_cost
+import logging
+
+from pydantic_ai.exceptions import UserError
+
+from app.agent import MAX_QUESTION_CHARS, AgentFailed, build_agent
+from app.budget import Budget, BudgetExceeded, ModelStats, SpendEntry
 from app.config import Settings
 from app.gate import BadImage, ScanCache, prepare
+from app.router import Router
 from app.schema import ScanResponse, ScanResult
+
+log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024  # phones produce 3-8 MB JPEGs; anything bigger is not a photo
@@ -48,19 +55,38 @@ class Services:
     settings: Settings
     budget: Budget
     cache: ScanCache[ScanResponse]
-    agent: Agent[None, ScanResult]
+    router: Router
     model_name: str
 
 
 class StatsResponse(BaseModel):
     model: str
+    escalation_model: str | None
     cap_usd: float
     month_to_date_usd: float
     remaining_usd: float
     scans_this_month: int
+    escalations: int
     cache_hits: int
     cache_misses: int
+    per_model: list[ModelStats]
     recent: list[SpendEntry]
+
+
+def _model_label(model: str | Model) -> str:
+    return model if isinstance(model, str) else getattr(model, "model_name", "model")
+
+
+def _build_escalation(settings: Settings) -> tuple[Agent[None, ScanResult] | None, str]:
+    """The second tier is optional: no model configured, or no key for it, = no escalation."""
+    name = settings.escalation_model
+    if not name:
+        return None, ""
+    try:
+        return build_agent(name), name
+    except UserError as e:  # e.g. ANTHROPIC_API_KEY missing; Pydantic AI raises at construction
+        log.warning("escalation disabled: %s", str(e).splitlines()[0])
+        return None, ""
 
 
 def _demo_model() -> Model:
@@ -91,12 +117,21 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        budget = Budget(settings.db_path, settings.budget_usd)
+        primary_name = _model_label(chosen_model)
+        # Demo mode and injected fake models never escalate: the second tier is a real-key feature.
+        escalation, escalation_name = (None, "") if not isinstance(chosen_model, str) else _build_escalation(settings)
         app.state.services = Services(
             settings=settings,
-            budget=Budget(settings.db_path, settings.budget_usd),
+            budget=budget,
             cache=ScanCache(capacity=settings.cache_size),
-            agent=build_agent(chosen_model),
-            model_name=chosen_model if isinstance(chosen_model, str) else getattr(chosen_model, "model_name", "model"),
+            router=Router(
+                budget,
+                build_agent(chosen_model), primary_name,
+                escalation, escalation_name,
+                escalate_below=settings.escalate_below,
+            ),
+            model_name=primary_name,
         )
         yield
 
@@ -135,35 +170,23 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         if (hit := svc.cache.lookup(frame.phash, question)) is not None:  # FR-4: free
             return hit.model_copy(update={"cached": True, "cost_usd": 0.0, "latency_ms": 0})
 
-        estimate = estimate_scan_cost(svc.model_name)
+        # The router does reserve -> scan -> settle/fail for each tier (001 FR-5/FR-6, 002 FR-1/FR-2).
         try:
-            request_id = svc.budget.reserve(svc.model_name, estimate)  # FR-5: atomic
+            routed = await svc.router.run(frame, question)
         except BudgetExceeded as e:
             raise HTTPException(402, str(e)) from e
-
-        try:
-            outcome = await scan(svc.agent, frame, question)
         except AgentFailed as e:
-            # The provider still billed those tokens: charge max(estimate, observed usage).
-            svc.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens)
             raise HTTPException(502, f"model could not produce a valid result: {e}") from e
-        except Exception:
-            svc.budget.fail(request_id)  # unknown failure: assume money was spent
-            raise
 
-        entry = svc.budget.settle(  # FR-6: real tokens, cost, latency
-            request_id,
-            input_tokens=outcome.input_tokens,
-            output_tokens=outcome.output_tokens,
-            latency_ms=outcome.latency_ms,
-        )
         response = ScanResponse(
-            result=outcome.result,
+            result=routed.result,
             cached=False,
-            request_id=entry.request_id,
-            model=svc.model_name,
-            cost_usd=entry.cost_usd,
-            latency_ms=entry.latency_ms,
+            request_id=routed.request_id,
+            model=routed.model,
+            primary_model=routed.primary_model,
+            escalated=routed.escalated,
+            cost_usd=routed.cost_usd,
+            latency_ms=routed.latency_ms,
         )
         svc.cache.store(frame.phash, question, response)
         return response
@@ -173,12 +196,15 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         entries = svc.budget.entries()
         return StatsResponse(
             model=svc.model_name,
+            escalation_model=svc.router.escalation_model or None,
             cap_usd=svc.budget.cap_usd,
             month_to_date_usd=svc.budget.month_to_date(),
             remaining_usd=svc.budget.remaining(),
-            scans_this_month=len(entries),
+            scans_this_month=sum(1 for e in entries if e.tier == "primary"),
+            escalations=svc.budget.escalations(),
             cache_hits=svc.cache.hits,
             cache_misses=svc.cache.misses,
+            per_model=svc.budget.per_model(),
             recent=entries[-20:],
         )
 

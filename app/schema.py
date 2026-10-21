@@ -119,11 +119,15 @@ class ScanResponse(BaseModel):
 
     `cached=True` means the gate matched a recent frame and no model was called;
     cost is then 0 and `request_id` is the id of the original paid scan.
+    `escalated=True` (feature 002) means the primary model's result was weak and
+    `result` comes from `model`, the escalation tier; `cost_usd` then covers both calls.
     """
 
     result: ScanResult
     cached: bool
     request_id: str
     model: str
+    primary_model: str
+    escalated: bool = False
     cost_usd: float = Field(ge=0)
     latency_ms: int = Field(ge=0)

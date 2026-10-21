@@ -41,9 +41,10 @@ calls per model, how many scans were escalated, cache hit rate, and the last few
 - FR-3 **Response reports what happened.** `ScanResponse` gains `escalated: bool` and
   `primary_model: str`; `model` is the model whose result is returned and `cost_usd` is the
   sum of both calls.
-- FR-4 **Calibrated estimates.** The reservation estimate for a model is the mean cost of its
-  last 20 settled calls times a 1.25 safety factor, falling back to the fixed token table when
-  fewer than 3 settled calls exist. Failed rows are excluded from the mean.
+- FR-4 **Calibrated estimates.** The reservation estimate for a model is the *highest* cost among
+  its last 20 settled, non-zero calls times a 1.25 safety factor, falling back to the fixed token
+  table when fewer than 3 such calls exist. Failed rows are excluded. (Max, not mean: an estimate
+  that is too low lets concurrent calls overshoot the cap.)
 - FR-5 **Per-model stats.** `GET /stats` adds `per_model: [{model, calls, failed, cost_usd,
   avg_latency_ms}]` and `escalations` (count this month).
 - FR-6 **Stats panel.** Tapping the cost in the page header opens a panel showing the FR-5 data

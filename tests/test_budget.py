@@ -197,11 +197,20 @@ def test_estimate_falls_back_to_table_until_enough_settled_rows(budget):
     assert budget.estimate_for(GEMINI) == pytest.approx(0.001 * CALIBRATION_SAFETY)
 
 
-def test_estimate_ignores_failed_rows_and_other_models(budget):
+def test_estimate_tracks_the_worst_recent_call_not_the_mean(budget):
+    from app.budget import CALIBRATION_SAFETY
+
+    for cost in (0.001, 0.001, 0.004):
+        spend(budget, cost)
+    assert budget.estimate_for(GEMINI) == pytest.approx(0.004 * CALIBRATION_SAFETY)
+
+
+def test_estimate_ignores_failed_zero_cost_and_other_model_rows(budget):
     from app.budget import CALIBRATION_SAFETY
 
     for _ in range(3):
         spend(budget, 0.002)
+    spend(budget, 0.0)  # a free (cached-by-provider?) row must not count as a measurement
     rid = budget.reserve(GEMINI, 2.0, now=NOW)  # big failed row must not skew the mean
     budget.fail(rid)
     budget.record(model=HAIKU, input_tokens=0, output_tokens=0, latency_ms=0, cost_usd=0.9, now=NOW)
@@ -215,7 +224,7 @@ def test_estimate_uses_only_the_most_recent_window(budget):
 
     for i in range(CALIBRATION_WINDOW + 5):
         spend(budget, 0.1 if i < 5 else 0.001, now=NOW + timedelta(seconds=i))  # old expensive rows first
-    assert budget.estimate_for(GEMINI) == pytest.approx(0.001 * CALIBRATION_SAFETY)
+    assert budget.estimate_for(GEMINI) == pytest.approx(0.001 * CALIBRATION_SAFETY)  # old max fell out of the window
 
 
 def test_per_model_breakdown_and_escalation_count(budget):

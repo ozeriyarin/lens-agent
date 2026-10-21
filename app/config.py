@@ -14,6 +14,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 DEFAULT_MODEL = "google:gemini-2.5-flash"
+DEFAULT_ESCALATION_MODEL = "anthropic:claude-haiku-4-5"
+DEFAULT_ESCALATE_BELOW = 0.6
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,10 @@ class Settings:
     # whenever the server is reachable from the internet (cloudflared/ngrok), or
     # anyone with the URL can spend the month's budget.
     scan_token: str = ""
+    # Feature 002: second tier. Empty string disables escalation (001 behaviour).
+    escalation_model: str = DEFAULT_ESCALATION_MODEL
+    # A primary result whose best object confidence is below this is "weak".
+    escalate_below: float = DEFAULT_ESCALATE_BELOW
 
     @classmethod
     def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
@@ -36,4 +42,6 @@ class Settings:
             db_path=Path(os.getenv("DB_PATH", "lens.db")),
             cache_size=int(os.getenv("CACHE_SIZE", "32")),
             scan_token=os.getenv("SCAN_TOKEN", "").strip(),
+            escalation_model=os.getenv("ESCALATION_MODEL", DEFAULT_ESCALATION_MODEL).strip(),
+            escalate_below=float(os.getenv("ESCALATE_BELOW", str(DEFAULT_ESCALATE_BELOW))),
         )

@@ -214,19 +214,22 @@ class Budget:
     def estimate_for(self, model: str) -> float:
         """002 FR-4: what to reserve for the next call on this model.
 
-        Mean of the last CALIBRATION_WINDOW *settled* calls times a safety factor
-        once we have CALIBRATION_MIN_ROWS of them; the fixed token table before
-        that. Failed rows are excluded: they carry estimates, not measurements.
+        The *highest* cost among the last CALIBRATION_WINDOW settled calls, times
+        a safety factor, once we have CALIBRATION_MIN_ROWS of them; the fixed
+        token table before that. Max rather than mean: a reservation that is too
+        small lets concurrent calls overshoot the cap, so the estimate tracks the
+        worst recent case, not the typical one. Failed rows (estimates, not
+        measurements) and zero-cost rows are excluded.
         """
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT cost_usd FROM spend WHERE model = ? AND status = 'settled' "
+                "SELECT cost_usd FROM spend WHERE model = ? AND status = 'settled' AND cost_usd > 0 "
                 "ORDER BY ts DESC LIMIT ?",
                 (model, CALIBRATION_WINDOW),
             ).fetchall()
         if len(rows) < CALIBRATION_MIN_ROWS:
             return estimate_scan_cost(model)
-        return CALIBRATION_SAFETY * sum(r[0] for r in rows) / len(rows)
+        return CALIBRATION_SAFETY * max(r[0] for r in rows)
 
     # --- the gate: reserve -> (settle | release) --------------------------------
 
@@ -301,19 +304,20 @@ class Budget:
         input_tokens: int = 0,
         output_tokens: int = 0,
         latency_ms: int = 0,
-    ) -> None:
+    ) -> SpendEntry | None:
         """The call errored *after* reaching the provider: charge the larger of the
         reserved estimate and the usage we did observe.
 
         Overcounting a failed call is the safe direction (constitution II);
-        the next month resets it anyway.
+        the next month resets it anyway. Returns the stored row, or None when
+        there was no live reservation to fail.
         """
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT model, cost_usd FROM spend WHERE request_id = ? AND status = 'reserved'", (request_id,)
             ).fetchone()
             if row is None:
-                return  # already settled/failed, or never reserved: nothing to do
+                return None  # already settled/failed, or never reserved: nothing to do
             model, reserved = row
             cost = max(float(reserved), estimate_cost(model, input_tokens, output_tokens))
             conn.execute(
@@ -321,6 +325,8 @@ class Budget:
                 "latency_ms = ? WHERE request_id = ?",
                 (input_tokens, output_tokens, cost, latency_ms, request_id),
             )
+            stored = conn.execute(f"SELECT {_COLUMNS} FROM spend WHERE request_id = ?", (request_id,)).fetchone()
+        return _row_to_entry(stored)
 
     def release(self, request_id: str) -> None:
         """Nothing was sent to the provider (we never got that far): give the money back.

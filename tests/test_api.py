@@ -129,3 +129,26 @@ def test_index_serves_the_pwa(tmp_path):
     with client:
         r = client.get("/")
         assert r.status_code == 200 and "<html" in r.text.lower()
+
+
+# --- feature 002 -------------------------------------------------------------------
+
+
+def test_stats_has_per_model_breakdown_and_escalation_fields(tmp_path):
+    client, settings = make_client(tmp_path)
+    with client:
+        post_scan(client, make_scene(8))
+        s = client.get("/stats").json()
+        assert s["escalation_model"] is None  # fake models never escalate
+        assert s["escalations"] == 0 and s["scans_this_month"] == 1
+        [row] = s["per_model"]
+        assert row["model"] == "test" and row["calls"] == 1 and row["failed"] == 0
+        assert row["cost_usd"] == pytest.approx(s["month_to_date_usd"])
+        assert s["recent"][0]["tier"] == "primary"
+
+
+def test_scan_response_reports_routing_fields(tmp_path):
+    client, _ = make_client(tmp_path)
+    with client:
+        body = post_scan(client, make_scene(8)).json()
+        assert body["primary_model"] == "test" and body["escalated"] is False
