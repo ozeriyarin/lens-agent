@@ -181,3 +181,70 @@ def test_scan_estimate_is_small_enough_to_afford_many_scans():
 def test_cap_must_be_positive(tmp_path):
     with pytest.raises(ValueError):
         Budget(tmp_path / "x.db", cap_usd=0)
+
+
+# --- feature 002: calibration, per-model stats, tiers ------------------------------
+
+
+def test_estimate_falls_back_to_table_until_enough_settled_rows(budget):
+    from app.budget import CALIBRATION_MIN_ROWS, CALIBRATION_SAFETY
+
+    assert budget.estimate_for(GEMINI) == pytest.approx(estimate_scan_cost(GEMINI))
+    for _ in range(CALIBRATION_MIN_ROWS - 1):
+        spend(budget, 0.001)
+    assert budget.estimate_for(GEMINI) == pytest.approx(estimate_scan_cost(GEMINI))  # still too few
+    spend(budget, 0.001)
+    assert budget.estimate_for(GEMINI) == pytest.approx(0.001 * CALIBRATION_SAFETY)
+
+
+def test_estimate_ignores_failed_rows_and_other_models(budget):
+    from app.budget import CALIBRATION_SAFETY
+
+    for _ in range(3):
+        spend(budget, 0.002)
+    rid = budget.reserve(GEMINI, 2.0, now=NOW)  # big failed row must not skew the mean
+    budget.fail(rid)
+    budget.record(model=HAIKU, input_tokens=0, output_tokens=0, latency_ms=0, cost_usd=0.9, now=NOW)
+    assert budget.estimate_for(GEMINI) == pytest.approx(0.002 * CALIBRATION_SAFETY)
+    assert budget.estimate_for(HAIKU) == pytest.approx(estimate_scan_cost(HAIKU))  # only 1 row
+
+
+def test_estimate_uses_only_the_most_recent_window(budget):
+    from app.budget import CALIBRATION_SAFETY, CALIBRATION_WINDOW
+    from datetime import timedelta
+
+    for i in range(CALIBRATION_WINDOW + 5):
+        spend(budget, 0.1 if i < 5 else 0.001, now=NOW + timedelta(seconds=i))  # old expensive rows first
+    assert budget.estimate_for(GEMINI) == pytest.approx(0.001 * CALIBRATION_SAFETY)
+
+
+def test_per_model_breakdown_and_escalation_count(budget):
+    budget.record(model=GEMINI, input_tokens=0, output_tokens=0, latency_ms=100, cost_usd=0.01, now=NOW)
+    budget.record(model=GEMINI, input_tokens=0, output_tokens=0, latency_ms=300, cost_usd=0.03, now=NOW)
+    rid = budget.reserve(GEMINI, 0.02, now=NOW)
+    budget.fail(rid, latency_ms=999)  # failed latency must not enter the average
+    esc = budget.reserve(HAIKU, 0.05, now=NOW, tier="escalation")
+    budget.settle(esc, input_tokens=1, output_tokens=1, latency_ms=800, cost_usd=0.05)
+
+    stats = {s.model: s for s in budget.per_model(NOW)}
+    assert stats[GEMINI].calls == 3 and stats[GEMINI].failed == 1
+    assert stats[GEMINI].cost_usd == pytest.approx(0.06) and stats[GEMINI].avg_latency_ms == 200
+    assert stats[HAIKU].calls == 1 and stats[HAIKU].avg_latency_ms == 800
+    assert budget.escalations(NOW) == 1
+    assert [e.tier for e in budget.entries(NOW)] == ["primary", "primary", "primary", "escalation"]
+
+
+def test_ledger_from_feature_001_gets_the_tier_column(tmp_path):
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE spend (request_id TEXT PRIMARY KEY, ts TEXT NOT NULL, model TEXT NOT NULL, "
+        "input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, cost_usd REAL NOT NULL, "
+        "latency_ms INTEGER NOT NULL, status TEXT NOT NULL)"
+    )
+    conn.execute("INSERT INTO spend VALUES ('old', ?, ?, 1, 1, 0.01, 5, 'settled')", (NOW.isoformat(), GEMINI))
+    conn.commit(); conn.close()
+    budget = Budget(path, cap_usd=5.0)
+    [entry] = budget.entries(NOW)
+    assert entry.tier == "primary" and entry.request_id == "old"
+    assert budget.escalations(NOW) == 0

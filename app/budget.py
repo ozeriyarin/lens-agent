@@ -54,6 +54,16 @@ SCAN_ESTIMATE_TOKENS = {"input_tokens": 2000, "output_tokens": 600}
 # because the provider still bills us and we have no exact figure.
 Status = Literal["reserved", "settled", "failed"]
 
+# primary: the cheap first call. escalation: the second-tier call feature 002
+# makes when the primary result was weak. Lets /stats count escalations.
+Tier = Literal["primary", "escalation"]
+
+# Calibration (002 FR-4): once a model has a few settled calls, estimate from
+# what it actually cost us rather than the fixed token table.
+CALIBRATION_WINDOW = 20
+CALIBRATION_MIN_ROWS = 3
+CALIBRATION_SAFETY = 1.25
+
 
 class BudgetExceeded(RuntimeError):
     """Raised when a call would push month-to-date spend over the cap."""
@@ -71,6 +81,18 @@ class SpendEntry:
     cost_usd: float
     latency_ms: int
     status: Status
+    tier: Tier = "primary"
+
+
+@dataclass(frozen=True)
+class ModelStats:
+    """One row of the per-model breakdown in /stats (002 FR-5)."""
+
+    model: str
+    calls: int
+    failed: int
+    cost_usd: float
+    avg_latency_ms: int
 
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -92,11 +114,11 @@ def _month_start(now: datetime) -> str:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
-_COLUMNS = "request_id, ts, model, input_tokens, output_tokens, cost_usd, latency_ms, status"
+_COLUMNS = "request_id, ts, model, input_tokens, output_tokens, cost_usd, latency_ms, status, tier"
 
 
 def _row_to_entry(r: tuple) -> SpendEntry:
-    return SpendEntry(r[0], datetime.fromisoformat(r[1]), r[2], r[3], r[4], r[5], r[6], r[7])
+    return SpendEntry(r[0], datetime.fromisoformat(r[1]), r[2], r[3], r[4], r[5], r[6], r[7], r[8])
 
 
 class Budget:
@@ -118,11 +140,16 @@ class Budget:
                     output_tokens INTEGER NOT NULL,
                     cost_usd      REAL NOT NULL,
                     latency_ms    INTEGER NOT NULL,
-                    status        TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'failed'))
+                    status        TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'failed')),
+                    tier          TEXT NOT NULL DEFAULT 'primary' CHECK (tier IN ('primary', 'escalation'))
                 )
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS spend_ts ON spend(ts)")
+            # Ledgers created by feature 001 predate the tier column: add it in place.
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(spend)")}
+            if "tier" not in cols:
+                conn.execute("ALTER TABLE spend ADD COLUMN tier TEXT NOT NULL DEFAULT 'primary'")
 
     def _connect(self) -> sqlite3.Connection:
         # isolation_level=None: we issue BEGIN/COMMIT ourselves where it matters.
@@ -159,6 +186,48 @@ class Budget:
             ).fetchall()
         return [_row_to_entry(r) for r in rows]
 
+    def per_model(self, now: datetime | None = None) -> list[ModelStats]:
+        """002 FR-5: this month's calls, failures, cost and mean latency per model."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT model,
+                       COUNT(*)                                                    AS calls,
+                       SUM(status = 'failed')                                      AS failed,
+                       COALESCE(SUM(cost_usd), 0)                                  AS cost,
+                       COALESCE(AVG(CASE WHEN status = 'settled' THEN latency_ms END), 0) AS lat
+                FROM spend WHERE ts >= ? GROUP BY model ORDER BY cost DESC
+                """,
+                (_month_start(now or _utcnow()),),
+            ).fetchall()
+        return [ModelStats(r[0], r[1], r[2], float(r[3]), int(round(r[4]))) for r in rows]
+
+    def escalations(self, now: datetime | None = None) -> int:
+        """How many escalation-tier calls this month (002 FR-5)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM spend WHERE ts >= ? AND tier = 'escalation'",
+                (_month_start(now or _utcnow()),),
+            ).fetchone()
+        return int(row[0])
+
+    def estimate_for(self, model: str) -> float:
+        """002 FR-4: what to reserve for the next call on this model.
+
+        Mean of the last CALIBRATION_WINDOW *settled* calls times a safety factor
+        once we have CALIBRATION_MIN_ROWS of them; the fixed token table before
+        that. Failed rows are excluded: they carry estimates, not measurements.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT cost_usd FROM spend WHERE model = ? AND status = 'settled' "
+                "ORDER BY ts DESC LIMIT ?",
+                (model, CALIBRATION_WINDOW),
+            ).fetchall()
+        if len(rows) < CALIBRATION_MIN_ROWS:
+            return estimate_scan_cost(model)
+        return CALIBRATION_SAFETY * sum(r[0] for r in rows) / len(rows)
+
     # --- the gate: reserve -> (settle | release) --------------------------------
 
     def reserve(
@@ -168,6 +237,7 @@ class Budget:
         *,
         request_id: str | None = None,
         now: datetime | None = None,
+        tier: Tier = "primary",
     ) -> str:
         """FR-5, atomically: refuse if month-to-date + estimate > cap, else hold the estimate.
 
@@ -185,8 +255,8 @@ class Budget:
                         f"cap {self.cap_usd:.2f} USD"
                     )
                 conn.execute(
-                    f"INSERT INTO spend ({_COLUMNS}) VALUES (?, ?, ?, 0, 0, ?, 0, 'reserved')",
-                    (request_id, ts.isoformat(), model, estimated_cost_usd),
+                    f"INSERT INTO spend ({_COLUMNS}) VALUES (?, ?, ?, 0, 0, ?, 0, 'reserved', ?)",
+                    (request_id, ts.isoformat(), model, estimated_cost_usd, tier),
                 )
                 conn.execute("COMMIT")
             except BaseException:
