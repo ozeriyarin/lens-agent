@@ -122,7 +122,8 @@ const STALE_MS = 8000;            // overlay dims after this (003 FR-5); it is o
    (object left the frame or changed too much) is dropped. */
 const TRACK_FPS = 8, TRACK_W = 160;         // working resolution: long side 160 px
 const TRACK_SEARCH = 0.35;                  // search radius as a fraction of the box size
-const TRACK_LOST = 38;                      // mean abs diff above this (0..255) = lost
+const TRACK_LOST = 48;                      // mean abs diff above this (0..255), after brightness normalization = lost
+const EMPTY_RETRY_MS = 4000;                // a result with no objects is retried after this even if the view is unchanged
 
 /* --- auth: shared secret from #token=, kept in localStorage, sent as Bearer ------------- */
 const TOKEN_KEY = 'lens.token';
@@ -140,6 +141,8 @@ function authHeaders() {
 }
 
 function setStatus(text, bad = false) { statusEl.textContent = text; statusEl.className = bad ? 'bad' : ''; }
+window.addEventListener('error', (e) => setStatus(`Page error: ${e.message}`, true));
+window.addEventListener('unhandledrejection', (e) => setStatus(`Page error: ${e.reason?.message || e.reason}`, true));
 function fmtUsd(v) { return v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`; }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -355,9 +358,9 @@ const tracker = {
       const x = Math.round(o.bbox.x * sw), y = Math.round(o.bbox.y * sh);
       const w = Math.max(4, Math.round(o.bbox.w * sw)), h = Math.max(4, Math.round(o.bbox.h * sh));
       if (w * h > sw * sh * 0.6) { this.items.push({ o, x, y, w, h, tpl: null, lost: false }); continue; } // near-full-frame box: pin, don't track
-      const tpl = new Uint8Array(w * h);
-      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) tpl[j * w + i] = frame[Math.min(sh - 1, y + j) * sw + Math.min(sw - 1, x + i)];
-      this.items.push({ o, x, y, w, h, tpl, lost: false });
+      const tpl = new Uint8Array(w * h); let mean = 0;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const v = frame[Math.min(sh - 1, y + j) * sw + Math.min(sw - 1, x + i)]; tpl[j * w + i] = v; mean += v; }
+      this.items.push({ o, x, y, w, h, tpl, tplMean: mean / (w * h), lost: false });
     }
     this.sw = sw; this.sh = sh;
     if (!this.timer) this.timer = setInterval(() => this.step(), 1000 / TRACK_FPS);
@@ -376,11 +379,18 @@ const tracker = {
       for (let dy = -ry; dy <= ry; dy += 2) for (let dx = -rx; dx <= rx; dx += 2) {
         const x0 = it.x + dx, y0 = it.y + dy;
         if (x0 < -it.w * 0.5 || y0 < -it.h * 0.5 || x0 > sw - it.w * 0.5 || y0 > sh - it.h * 0.5) continue;
-        let sum = 0, n = 0;
+        // Compare with the brightness difference removed, so auto-exposure or a lamp
+        // switching on does not look like the object vanishing.
+        let psum = 0, n = 0;
+        for (let j = 0; j < it.h; j += step) { const yy = y0 + j; if (yy < 0 || yy >= sh) continue;
+          for (let i = 0; i < it.w; i += step) { const xx = x0 + i; if (xx < 0 || xx >= sw) continue; psum += frame[yy * sw + xx]; n++; } }
+        if (!n) continue;
+        const shift = psum / n - it.tplMean;
+        let sum = 0;
         for (let j = 0; j < it.h; j += step) { const yy = y0 + j; if (yy < 0 || yy >= sh) continue;
           for (let i = 0; i < it.w; i += step) { const xx = x0 + i; if (xx < 0 || xx >= sw) continue;
-            sum += Math.abs(frame[yy * sw + xx] - it.tpl[j * it.w + i]); n++; } }
-        if (n && sum / n < best) { best = sum / n; bx = x0; by = y0; }
+            sum += Math.abs(frame[yy * sw + xx] - shift - it.tpl[j * it.w + i]); } }
+        if (sum / n < best) { best = sum / n; bx = x0; by = y0; }
       }
       if (best > TRACK_LOST || bx + it.w < 0 || by + it.h < 0 || bx > sw || by > sh) { it.lost = true; continue; }
       it.x = bx; it.y = by;
@@ -463,7 +473,7 @@ againBtn.addEventListener('click', () => {
 
 /* --- live mode (003 FR-1, FR-3, FR-6) ---------------------------------------------------------- */
 const live = {
-  on: false, timer: null, inFlight: false, lastSent: null, prevThumb: null, sent: 0, skipped: 0,
+  on: false, timer: null, inFlight: false, lastSent: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0,
   spent: 0, charges: [],   // [{t, cost}] for the per-minute projection
   perMinute() { const cut = Date.now() - 60000; return this.charges.filter((c) => c.t > cut).reduce((a, c) => a + c.cost, 0); },
   start() {
@@ -491,13 +501,20 @@ const live = {
     try { thumb = thumbnail(); } catch { return; }
     const prev = this.prevThumb; this.prevThumb = thumb;
     const still = !prev || meanAbsDiff(thumb, prev) < STILL_THRESHOLD;
-    const changed = !this.lastSent || meanAbsDiff(thumb, this.lastSent) >= SENSITIVITY[$('sensitivity').value];
-    if (!changed || !still) { this.skipped++; return; }   // unchanged view, or still moving: wait
+    let changed = !this.lastSent || meanAbsDiff(thumb, this.lastSent) >= SENSITIVITY[$('sensitivity').value];
+    // "Nothing identifiable" is not an answer worth keeping: try the same view again after a moment.
+    if (!changed && this.lastEmptyAt && Date.now() - this.lastEmptyAt > EMPTY_RETRY_MS) changed = true;
+    if (!changed || !still) {
+      this.skipped++;
+      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${still ? 'view unchanged, waiting' : 'moving…'}`);
+      return;
+    }
     this.inFlight = true;
     try {
       const blob = await captureJpeg(false);
       const resp = await postScan(blob, $('question').value.trim(), true);
       this.lastSent = thumb; this.sent++;
+      this.lastEmptyAt = resp.result.objects.length ? 0 : Date.now();
       if (!resp.cached) { this.spent += resp.cost_usd; this.charges.push({ t: Date.now(), cost: resp.cost_usd }); }
       showResponse(resp);
       setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · last ${resp.cached ? 'cached' : fmtUsd(resp.cost_usd) + ' · ' + resp.latency_ms + ' ms'}${resp.escalated ? ' · escalated' : ''}`);

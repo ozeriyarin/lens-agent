@@ -194,3 +194,16 @@ def test_live_header_tags_the_ledger_row_and_stats_split_by_source(tmp_path):
         assert [e.source for e in entries] == ["tap", "live", "tap"]
         s = client.get("/stats").json()
         assert s["scans_by_source"] == {"tap": 2, "live": 1} and s["scans_this_month"] == 3
+
+
+def test_empty_results_are_not_cached(tmp_path):
+    def nothing(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        from pydantic_ai.messages import ToolCallPart
+        return ModelResponse(parts=[ToolCallPart(tool_name=info.output_tools[0].name, args={"scene": "blur", "objects": []})])
+
+    client, settings = make_client(tmp_path, model=FunctionModel(nothing, model_name="fake"))
+    with client:
+        first = post_scan(client, make_scene(13)).json()
+        again = post_scan(client, recapture(make_scene(13))).json()
+        assert first["result"]["objects"] == [] and again["cached"] is False
+        assert len(Budget(settings.db_path, 5).entries()) == 2  # looked again, paid again

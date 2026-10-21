@@ -211,7 +211,10 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             cost_usd=routed.cost_usd,
             latency_ms=routed.latency_ms,
         )
-        svc.cache.store(frame.phash, question, response)
+        # An empty result ("nothing identifiable") is not cached: a repeated near-identical
+        # frame deserves a fresh look, since blur or a bad exposure may have cleared by then.
+        if not routed.result.is_empty:
+            svc.cache.store(frame.phash, question, response)
         return response
 
     @app.get("/stats", response_model=StatsResponse)
