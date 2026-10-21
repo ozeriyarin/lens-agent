@@ -2,7 +2,7 @@
 
 - [x] T1 Schema: `DetectedObject`, `ScanResult` (app/schema.py) + tests
 - [x] T2 Budget guard: ledger table, `can_spend`, `record` (app/budget.py) + tests
-- [ ] T3 Gate: resize, phash, LRU cache (app/gate.py) + tests
+- [x] T3 Gate: resize, phash, LRU cache (app/gate.py) + tests
 - [ ] T4 Agent: Pydantic AI agent with system prompt and `ScanResult` output (app/agent.py)
 - [ ] T5 API: `POST /scan`, `GET /stats`, static hosting (app/main.py)
 - [ ] T6 PWA: camera, scan button, question box, result cards (static/index.html)
