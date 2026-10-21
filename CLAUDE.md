@@ -48,6 +48,7 @@ Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RA
 4. `/speckit-plan` → `/speckit-tasks` → `/speckit-implement`. The owner reviews every generated artifact before the next step; explain decisions briefly as you go — this project is for learning, not just output.
 5. Never hardcode API keys; use `.env` (gitignored) with `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `MODEL`, `BUDGET_USD=5`.
 6. Keep the owner's coding preference: guide and explain, don't just dump code when a concept is new.
+7. Evals discipline (feature 006): any change to `INSTRUCTIONS`, `LIVE_HINT`, `SCAN_MODEL_SETTINGS`, the model strings, `ESCALATE_BELOW` or `app/schema.py` is committed with the output of `uv run python -m app.evals run` in the message, compared to the previous report in `eval/runs/`.
 
 ## Open decisions
 - Pydantic AI vs LangGraph: start with Pydantic AI; reconsider at feature 003 if workflows branch.

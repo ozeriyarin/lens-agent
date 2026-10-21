@@ -1,0 +1,231 @@
+{
+ "created": "2026-10-21T16:07:25+00:00",
+ "tag": "baseline",
+ "set": "eval\\set.jsonl",
+ "set_size": 7,
+ "model": "google:gemini-2.5-flash",
+ "escalation_model": "anthropic:claude-haiku-4-5",
+ "fingerprint": "babc94e7e105",
+ "summary": {
+  "photos": 7,
+  "errors": 0,
+  "mean_recall": 0.8528,
+  "forbid_hit_rate": 0.0,
+  "iou_mean": 0.4841,
+  "iou_photos": 2,
+  "answer_accuracy": 1.0,
+  "escalation_rate": 0.0,
+  "mean_cost_usd": 0.001943,
+  "total_cost_usd": 0.0136,
+  "latency_p50_ms": 4996,
+  "latency_p95_ms": 5523,
+  "failures": [
+   {
+    "id": "home-01",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-03",
+    "missed": [
+     "GO yogurt cup"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-05",
+    "missed": [
+     "humidity control"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-06",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-07",
+    "missed": [
+     "mustard container",
+     "yellow bottle"
+    ],
+    "forbid_hits": [],
+    "error": null
+   }
+  ]
+ },
+ "photos": [
+  {
+   "id": "home-01",
+   "file": "home-01.jpg",
+   "expected": 9,
+   "matched": 8,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "yellow container",
+    "spice jar",
+    "green bottle",
+    "small bottle",
+    "small bottle"
+   ],
+   "recall": 0.8888888888888888,
+   "iou_mean": 0.8288403050998303,
+   "answer_hit": true,
+   "latency_ms": 5170,
+   "cost_usd": 0.0024216,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  },
+  {
+   "id": "home-02",
+   "file": "home-02.jpg",
+   "expected": 8,
+   "matched": 8,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "jar of food",
+    "red container",
+    "sauce bottle",
+    "sauce bottle",
+    "sauce bottle"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 5012,
+   "cost_usd": 0.0023933,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  },
+  {
+   "id": "home-03",
+   "file": "home-03.jpg",
+   "expected": 3,
+   "matched": 2,
+   "missed": [
+    "GO yogurt cup"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "bowl with spoon"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 1997,
+   "cost_usd": 0.0010744,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  },
+  {
+   "id": "home-04",
+   "file": "home-04.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "yogurt cup",
+    "paper towel"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 3013,
+   "cost_usd": 0.0014433,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  },
+  {
+   "id": "home-05",
+   "file": "home-05.jpg",
+   "expected": 5,
+   "matched": 4,
+   "missed": [
+    "humidity control"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.8,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 2284,
+   "cost_usd": 0.0011333,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  },
+  {
+   "id": "home-06",
+   "file": "home-06.jpg",
+   "expected": 10,
+   "matched": 9,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "yellow container with red lid",
+    "green bottle",
+    "sauce bottle",
+    "green bottle",
+    "yellow bottle"
+   ],
+   "recall": 0.9,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 5523,
+   "cost_usd": 0.0026563000000000003,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  },
+  {
+   "id": "home-07",
+   "file": "home-07.jpg",
+   "expected": 7,
+   "matched": 5,
+   "missed": [
+    "mustard container",
+    "yellow bottle"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "jar",
+    "bottle",
+    "container",
+    "container"
+   ],
+   "recall": 0.7142857142857143,
+   "iou_mean": 0.13934535146387922,
+   "answer_hit": true,
+   "latency_ms": 4996,
+   "cost_usd": 0.0024766,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null
+  }
+ ]
+}

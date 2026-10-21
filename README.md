@@ -125,6 +125,25 @@ along the bottom. The header shows live spend and a per-minute projection; a 401
 live mode with the reason. Nothing is recorded or stored: each frame lives in memory for one
 request.
 
+## Evals (feature 006)
+
+Unit tests prove the code; evals measure the model. `eval/set.jsonl` lists photos (kept outside
+the repo in `EVAL_PHOTOS_DIR`, default `C:/ai-projects/lens-agent-eval-photos`) with the objects
+that must be found, aliases, optional hand-checked boxes, things the model has wrongly claimed
+before, and optional questions with expected answers.
+
+```bash
+uv run python -m app.evals run --tag baseline      # real models, ~0.003 USD/photo, report in eval/runs/
+uv run python -m app.evals run --model test        # offline, checks the scorer
+uv run python -m app.evals bootstrap               # draft labels for new photos; then edit, drop "draft": true
+uv run python -m app.evals compare eval/runs/A.json eval/runs/B.json
+```
+
+Metrics: recall of expected objects, forbid-hit rate (hallucinations), mean IoU on boxed
+objects, answer accuracy, escalation rate, cost per photo, latency p50/p95, and the list of
+what was missed per photo. Rule: any change to the instructions, model settings, model strings,
+escalation threshold or schema is committed with the eval summary in the message.
+
 ## Cost model
 
 Before a scan the ledger reserves an estimate: the highest cost among the model's last 20
@@ -143,9 +162,11 @@ app/gate.py     prepare() + ScanCache                        (resize, pHash, LRU
 app/budget.py   Budget: reserve / settle / fail, SQLite     (the cap)
 app/agent.py    build_agent(), scan()                        (Pydantic AI)
 app/router.py   is_weak(), Router.run()                      (cheap first, escalate once)
+app/evals.py    eval set, scorer, runner, bootstrap, compare   (measure the model)
 app/main.py     FastAPI composition, /scan, /stats           (the wiring)
 app/config.py   Settings.from_env()
 static/         index.html, the whole client
 specs/          one folder per feature: spec → plan → tasks
+eval/           set.jsonl (labels) and runs/ (reports); photos live outside the repo
 tests/          one file per module, plus end-to-end API tests
 ```
