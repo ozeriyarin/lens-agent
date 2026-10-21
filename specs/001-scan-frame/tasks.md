@@ -1,7 +1,7 @@
 # Tasks: 001 scan-frame
 
 - [x] T1 Schema: `DetectedObject`, `ScanResult` (app/schema.py) + tests
-- [ ] T2 Budget guard: ledger table, `can_spend`, `record` (app/budget.py) + tests
+- [x] T2 Budget guard: ledger table, `can_spend`, `record` (app/budget.py) + tests
 - [ ] T3 Gate: resize, phash, LRU cache (app/gate.py) + tests
 - [ ] T4 Agent: Pydantic AI agent with system prompt and `ScanResult` output (app/agent.py)
 - [ ] T5 API: `POST /scan`, `GET /stats`, static hosting (app/main.py)
