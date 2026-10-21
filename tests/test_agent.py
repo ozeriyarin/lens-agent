@@ -62,6 +62,13 @@ async def test_question_and_image_both_reach_the_model(frame):
     assert INSTRUCTIONS.split("\n")[0] in (request.instructions or "")
 
 
+async def test_overlong_question_is_truncated_in_the_prompt(frame):
+    from app.agent import MAX_QUESTION_CHARS, _prompt
+
+    text = _prompt(frame, "q" * (MAX_QUESTION_CHARS + 1000))[0]
+    assert len(text) < MAX_QUESTION_CHARS + 100
+
+
 async def test_malformed_output_is_retried_once_then_fails(frame):
     calls = 0
 

@@ -107,3 +107,18 @@ class ScanResult(BaseModel):
     @property
     def is_empty(self) -> bool:
         return not self.objects
+
+
+class ScanResponse(BaseModel):
+    """What `POST /scan` returns: the agent's result plus what the call cost us.
+
+    `cached=True` means the gate matched a recent frame and no model was called;
+    cost is then 0 and `request_id` is the id of the original paid scan.
+    """
+
+    result: ScanResult
+    cached: bool
+    request_id: str
+    model: str
+    cost_usd: float = Field(ge=0)
+    latency_ms: int = Field(ge=0)

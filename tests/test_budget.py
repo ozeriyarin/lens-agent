@@ -74,8 +74,16 @@ def test_reservation_counts_until_settled_or_released(budget):
     assert budget.month_to_date(NOW) == pytest.approx(entry.cost_usd)  # estimate replaced by real cost
 
     rid2 = budget.reserve(GEMINI, 1.0, now=NOW)
-    budget.release(rid2)  # model call failed: nothing billed
+    budget.release(rid2)  # never reached the provider: nothing billed
     assert budget.month_to_date(NOW) == pytest.approx(entry.cost_usd)
+
+    rid3 = budget.reserve(GEMINI, 1.0, now=NOW)
+    budget.fail(rid3, latency_ms=50)  # reached the provider, then broke: estimate stays charged
+    assert budget.month_to_date(NOW) == pytest.approx(entry.cost_usd + 1.0)
+    assert [e.status for e in budget.entries(NOW)] == ["settled", "failed"]
+    budget.fail(rid3)  # idempotent: only a 'reserved' row changes
+    budget.release(rid3)  # and a failed row cannot be released
+    assert budget.month_to_date(NOW) == pytest.approx(entry.cost_usd + 1.0)
 
 
 def test_settle_twice_or_settle_unknown_is_an_error(budget):

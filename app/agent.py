@@ -19,8 +19,9 @@ import time
 from dataclasses import dataclass
 
 from pydantic_ai import Agent, BinaryContent
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded
 from pydantic_ai.models import Model
+from pydantic_ai.usage import UsageLimits
 
 from app.gate import PreparedFrame
 from app.schema import ScanResult
@@ -49,8 +50,24 @@ Rules:
 """
 
 
+# A question is a short sentence. Anything longer is either a mistake or an
+# attempt to make one scan cost many times the estimate the budget reserved.
+MAX_QUESTION_CHARS = 500
+
+# Hard ceilings per scan so a misbehaving model cannot run away from the
+# budget estimate. Input size is already bounded by our own code (<=1024px
+# image, <=500 char question), so we cap what the *model* controls: the
+# number of requests (initial + one retry) and the output size (several
+# times a normal ScanResult).
+SCAN_USAGE_LIMITS = UsageLimits(request_limit=2, output_tokens_limit=4000)
+
+
 class AgentFailed(RuntimeError):
-    """The model could not produce a valid ScanResult even after the retry."""
+    """The model could not produce a valid ScanResult even after the retry.
+
+    Tokens were still consumed on the provider side, so the caller must keep
+    the budget reservation charged (see `Budget.fail`), not release it.
+    """
 
 
 @dataclass(frozen=True)
@@ -78,7 +95,7 @@ def build_agent(model: str | Model) -> Agent[None, ScanResult]:
 def _prompt(frame: PreparedFrame, question: str | None) -> list[str | BinaryContent]:
     text = "Describe the objects in this photo."
     if question and question.strip():
-        text += f" The user also asks: {question.strip()}"
+        text += f" The user also asks: {question.strip()[:MAX_QUESTION_CHARS]}"
     return [text, BinaryContent(data=frame.jpeg, media_type=frame.media_type)]
 
 
@@ -86,8 +103,8 @@ async def scan(agent: Agent[None, ScanResult], frame: PreparedFrame, question: s
     """Run the agent on one prepared frame. Raises AgentFailed on malformed output."""
     started = time.perf_counter()
     try:
-        run = await agent.run(_prompt(frame, question))
-    except UnexpectedModelBehavior as e:
+        run = await agent.run(_prompt(frame, question), usage_limits=SCAN_USAGE_LIMITS)
+    except (UnexpectedModelBehavior, UsageLimitExceeded) as e:
         raise AgentFailed(str(e)) from e
     usage = run.usage
     return ScanOutcome(

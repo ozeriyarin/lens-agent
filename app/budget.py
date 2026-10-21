@@ -49,7 +49,10 @@ _CONSERVATIVE_PRICE = max(PRICES_USD_PER_MTOK.values())
 # tokens. Deliberately rounded *up*.
 SCAN_ESTIMATE_TOKENS = {"input_tokens": 2000, "output_tokens": 600}
 
-Status = Literal["reserved", "settled"]
+# reserved: estimate held, call in flight. settled: real cost known.
+# failed: the call errored after tokens were sent; the estimate stays charged
+# because the provider still bills us and we have no exact figure.
+Status = Literal["reserved", "settled", "failed"]
 
 
 class BudgetExceeded(RuntimeError):
@@ -115,7 +118,7 @@ class Budget:
                     output_tokens INTEGER NOT NULL,
                     cost_usd      REAL NOT NULL,
                     latency_ms    INTEGER NOT NULL,
-                    status        TEXT NOT NULL CHECK (status IN ('reserved', 'settled'))
+                    status        TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'failed'))
                 )
                 """
             )
@@ -221,8 +224,23 @@ class Budget:
             ).fetchone()
         return _row_to_entry(stored)
 
+    def fail(self, request_id: str, latency_ms: int = 0) -> None:
+        """The call errored *after* reaching the provider: keep the estimate charged.
+
+        Overcounting a failed call is the safe direction (constitution II);
+        the next month resets it anyway.
+        """
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE spend SET status = 'failed', latency_ms = ? WHERE request_id = ? AND status = 'reserved'",
+                (latency_ms, request_id),
+            )
+
     def release(self, request_id: str) -> None:
-        """The call failed before anything was billed: give the reservation back."""
+        """Nothing was sent to the provider (we never got that far): give the money back.
+
+        Only for failures *before* the request leaves the process. If in doubt, use `fail`.
+        """
         with self._connect() as conn:
             conn.execute(
                 "DELETE FROM spend WHERE request_id = ? AND status = 'reserved'", (request_id,)
