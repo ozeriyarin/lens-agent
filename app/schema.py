@@ -53,12 +53,17 @@ AgeRange = Literal["child", "teen", "young_adult", "adult", "senior", "unknown"]
 
 
 class BBox(BaseModel):
-    """Normalized bounding box, 0..1, origin top-left (x, y) with width/height."""
+    """Normalized bounding box, 0..1, origin top-left (x, y) with width/height.
 
-    x: float = Field(ge=0, le=1)
-    y: float = Field(ge=0, le=1)
-    w: float = Field(gt=0, le=1)
-    h: float = Field(gt=0, le=1)
+    The field descriptions are part of the JSON schema the model sees. Vision models
+    have other habits (Gemini: [ymin, xmin, ymax, xmax] on 0..1000), so each field says
+    exactly what it is; vague descriptions produced boxes in the wrong place.
+    """
+
+    x: float = Field(ge=0, le=1, description="LEFT edge as a fraction of image width (0 = left edge, 1 = right edge)")
+    y: float = Field(ge=0, le=1, description="TOP edge as a fraction of image height (0 = top edge, 1 = bottom edge)")
+    w: float = Field(gt=0, le=1, description="WIDTH as a fraction of image width (right edge = x + w). Not the right-edge coordinate.")
+    h: float = Field(gt=0, le=1, description="HEIGHT as a fraction of image height (bottom edge = y + h). Not the bottom-edge coordinate.")
 
     @model_validator(mode="after")
     def _inside_frame(self) -> "BBox":

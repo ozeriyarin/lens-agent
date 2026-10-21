@@ -21,6 +21,7 @@ from dataclasses import dataclass
 
 from pydantic_ai import Agent, BinaryContent
 from pydantic_ai.models import Model
+from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import RunUsage, UsageLimits
 
 from app.gate import PreparedFrame
@@ -39,8 +40,12 @@ Rules:
   standing, ...). Use "unknown" rather than guessing.
 - `confidence` is how sure you are the object is present, 0..1. Be honest: a blurry
   or partly hidden object gets a lower number.
-- `bbox` is optional. Only include it when you can place the object reasonably well,
-  as fractions of the image width/height from the top-left corner.
+- `bbox` is optional. Only include it when you can place the object reasonably well.
+  Convention, exactly: x = left edge / image width, y = top edge / image height,
+  w = box width / image width, h = box height / image height, all 0..1. So a box
+  covering the right half of the image is x=0.5, y=0, w=0.5, h=1. Do NOT use
+  [ymin, xmin, ymax, xmax] or a 0..1000 scale. The box should be tight around the
+  visible object.
 - For a person, fill `person.mood` and `person.age_range` as *estimates with a
   confidence*. Never state them as facts. Do not try to identify who the person is.
 - `scene` is one plain sentence describing the whole picture.
@@ -90,6 +95,14 @@ class ScanOutcome:
     latency_ms: int
 
 
+# Why these settings: the phone session logs showed 600-2500 *output* tokens and 4-13 s per
+# scan for a JSON of a handful of objects. That is the model's hidden "thinking" (reasoning
+# tokens count as output and are billed). Object listing does not need it; switching it off
+# cuts latency and cost, which is what live mode lives on. Low temperature keeps the
+# structured output stable between near-identical frames.
+SCAN_MODEL_SETTINGS: ModelSettings = {"thinking": False, "temperature": 0.2, "max_tokens": 1500}
+
+
 def build_agent(model: str | Model) -> Agent[None, ScanResult]:
     """One agent per process. `retries={'output': 1}` = spec edge case: retry once, then fail."""
     return Agent(
@@ -97,23 +110,35 @@ def build_agent(model: str | Model) -> Agent[None, ScanResult]:
         output_type=ScanResult,
         instructions=INSTRUCTIONS,
         retries={"output": 1, "tools": 1},
+        model_settings=SCAN_MODEL_SETTINGS,
         name="lens-scan",
     )
 
 
-def _prompt(frame: PreparedFrame, question: str | None) -> list[str | BinaryContent]:
+LIVE_HINT = (
+    " Live mode: be brief. List at most 6 of the most prominent objects, keep `scene` under"
+    " 12 words, and leave `answer` fields empty unless a question was asked."
+)
+
+
+def _prompt(frame: PreparedFrame, question: str | None, brief: bool = False) -> list[str | BinaryContent]:
     text = "Describe the objects in this photo."
     if question and question.strip():
         text += f" The user also asks: {question.strip()[:MAX_QUESTION_CHARS]}"
+    if brief:
+        text += LIVE_HINT
     return [text, BinaryContent(data=frame.jpeg, media_type=frame.media_type)]
 
 
-async def scan(agent: Agent[None, ScanResult], frame: PreparedFrame, question: str | None = None) -> ScanOutcome:
-    """Run the agent on one prepared frame. Raises AgentFailed on malformed output."""
+async def scan(
+    agent: Agent[None, ScanResult], frame: PreparedFrame, question: str | None = None, *, brief: bool = False
+) -> ScanOutcome:
+    """Run the agent on one prepared frame. Raises AgentFailed on malformed output.
+    `brief` (live mode) asks for a shorter result: fewer objects, shorter scene text."""
     started = time.perf_counter()
     usage = RunUsage()  # passed in so we still have the numbers if the run raises
     try:
-        run = await agent.run(_prompt(frame, question), usage_limits=SCAN_USAGE_LIMITS, usage=usage)
+        run = await agent.run(_prompt(frame, question, brief), usage_limits=SCAN_USAGE_LIMITS, usage=usage)
     except Exception as e:
         # Any failure after the request went out (schema retries exhausted, usage limit,
         # provider 5xx on the retry, transport error) must carry the tokens already spent,

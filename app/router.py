@@ -86,7 +86,7 @@ class Router:
         request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier, source=source)
         started = time.perf_counter()
         try:
-            outcome = await scan(agent, frame, question)
+            outcome = await scan(agent, frame, question, brief=(source == "live"))
         except AgentFailed as e:
             self.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens,
                              latency_ms=int((time.perf_counter() - started) * 1000))

@@ -81,6 +81,10 @@
       <option value="1000">1 s</option><option value="1500" selected>1.5 s</option>
       <option value="2000">2 s</option><option value="3000">3 s</option><option value="5000">5 s</option>
     </select>
+    <select id="sensitivity" title="how much the scene must change before a live frame is sent">
+      <option value="low">low sens.</option><option value="medium" selected>medium sens.</option><option value="high">high sens.</option>
+    </select>
+    <button id="flipBtn" type="button" class="secondary" disabled title="switch between rear and front camera">Flip</button>
     <button id="againBtn" type="button" class="secondary" hidden>Again</button>
   </form>
   <div id="status">Starting camera…</div>
@@ -101,9 +105,15 @@ const $ = (id) => document.getElementById(id);
 const video = $('cam'), shot = $('shot'), overlay = $('overlay'), stage = $('stage');
 const scanBtn = $('scanBtn'), liveBtn = $('liveBtn'), againBtn = $('againBtn'), statusEl = $('status'), results = $('results');
 const MAX_UPLOAD_SIDE = 1280;
-const MOTION_THRESHOLD = 6;       // mean abs diff on 0..255 grayscale thumbnails (003 FR-2). An object moving
-                                  // across ~10% of the frame scores ~8-10; sensor noise on the 32x24 thumbnail ~1-3.
-const THUMB_W = 32, THUMB_H = 24;
+/* Motion gate (003 FR-2). Two rules, both on a coarse 16x12 grayscale thumbnail (coarse = hand
+   shake and sensor noise average out):
+   - CHANGED: the frame differs from the last frame we *sent* by more than the sensitivity threshold.
+   - STILL:   the frame differs from the *previous tick* by less than a small amount, i.e. the
+              movement has stopped. We only send when both hold, so panning or a trembling hand
+              never triggers a scan; arriving at a new view and holding it does. */
+const SENSITIVITY = { low: 16, medium: 10, high: 6 };   // CHANGED threshold, mean abs diff 0..255
+const STILL_THRESHOLD = 4;                              // STILL threshold between consecutive ticks
+const THUMB_W = 16, THUMB_H = 12;
 const STALE_MS = 4000;            // overlay dims after this (003 FR-5)
 
 /* --- auth: shared secret from #token=, kept in localStorage, sent as Bearer ------------- */
@@ -127,6 +137,7 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&a
 
 /* --- camera ------------------------------------------------------------------------------ */
 let frameSource = video;          // what we capture from; tests may swap in a canvas (window.lens.setSource)
+let facing = 'environment';       // 'environment' = rear, 'user' = front
 function sourceSize() {
   return frameSource === video ? [video.videoWidth, video.videoHeight] : [frameSource.width, frameSource.height];
 }
@@ -136,19 +147,31 @@ async function startCamera() {
     return;
   }
   try {
+    if (video.srcObject) video.srcObject.getTracks().forEach((t) => t.stop());
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false,
+      video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false,
     });
     video.srcObject = stream;
     await video.play();
     fitStageTo(video.videoWidth, video.videoHeight);
+    video.style.transform = facing === 'user' ? 'scaleX(-1)' : '';   // mirror the selfie preview only
+    overlay.style.transform = video.style.transform;                   // keep boxes on the mirrored pixels
     enableControls();
-    setStatus('Point at a scene and tap Scan, or switch Live on.');
+    if (!live.on) setStatus('Point at a scene and tap Scan, or switch Live on.');
   } catch (err) {
     setStatus(`Camera blocked: ${err.message}. Allow camera access and reload.`, true);
   }
 }
-function enableControls() { scanBtn.disabled = false; liveBtn.disabled = false; }
+async function flipCamera() {
+  facing = facing === 'environment' ? 'user' : 'environment';
+  $('flipBtn').disabled = true;
+  await startCamera();          // works mid-live: the loop keeps reading from the same <video>
+  live.lastSent = null; live.prevThumb = null;   // new camera = new scene; the next still frame is sent
+  if (!live.on) { drawOverlay(null); shot.style.display = 'none'; againBtn.hidden = true; scanBtn.disabled = false; }
+  $('flipBtn').disabled = false;
+}
+$('flipBtn').addEventListener('click', flipCamera);
+function enableControls() { scanBtn.disabled = false; liveBtn.disabled = false; $('flipBtn').disabled = false; }
 function fitStageTo(w, h) {
   // The stage takes the frame's own aspect ratio (no crop), and the overlay canvas gets the
   // frame's pixel size, so overlay coordinates == frame coordinates after CSS scaling.
@@ -214,15 +237,18 @@ function drawOverlay(resp, stale = false) {
   g.font = `600 ${base}px system-ui, sans-serif`;
   g.textBaseline = 'top';
 
+  const mirrored = overlay.style.transform.includes('scaleX(-1)');
   const label = (lines, x, y, color) => {
-    // Text with a backing rectangle so it reads on any scene.
+    // Text with a backing rectangle so it reads on any scene. When the preview is mirrored
+    // (front camera) the canvas is mirrored too, so text is drawn flipped back to read normally.
     const pad = base * 0.3, lh = base * 1.25;
     const w = Math.max(...lines.map((t) => g.measureText(t).width)) + pad * 2;
     const h = lines.length * lh + pad * 2 - (lh - base);
     const yy = Math.min(Math.max(0, y), H - h), xx = Math.min(Math.max(0, x), W - w);
     g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(xx, yy, w, h);
     g.fillStyle = color;
-    lines.forEach((t, i) => g.fillText(t, xx + pad, yy + pad + i * lh));
+    if (mirrored) { g.save(); g.translate(xx + w, 0); g.scale(-1, 1); lines.forEach((t, i) => g.fillText(t, pad, yy + pad + i * lh)); g.restore(); }
+    else lines.forEach((t, i) => g.fillText(t, xx + pad, yy + pad + i * lh));
     return h;
   };
 
@@ -257,7 +283,9 @@ function drawOverlay(resp, stale = false) {
   const lh = base * 0.9 * 1.25, h = lines.length * lh + base * 0.6;
   g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(0, H - h, W, h);
   g.fillStyle = '#e8eaf0';
+  if (mirrored) { g.save(); g.translate(W, 0); g.scale(-1, 1); }
   lines.forEach((t, i) => g.fillText(t, base * 0.5, H - h + base * 0.3 + i * lh));
+  if (mirrored) g.restore();
   g.globalAlpha = 1;
 }
 setInterval(() => {  // staleness fade while live
@@ -366,16 +394,16 @@ againBtn.addEventListener('click', () => {
 
 /* --- live mode (003 FR-1, FR-3, FR-6) ---------------------------------------------------------- */
 const live = {
-  on: false, timer: null, inFlight: false, lastSent: null, sent: 0, skipped: 0,
+  on: false, timer: null, inFlight: false, lastSent: null, prevThumb: null, sent: 0, skipped: 0,
   spent: 0, charges: [],   // [{t, cost}] for the per-minute projection
   perMinute() { const cut = Date.now() - 60000; return this.charges.filter((c) => c.t > cut).reduce((a, c) => a + c.cost, 0); },
   start() {
     if (this.on) return;
-    this.on = true; this.lastSent = null; this.sent = 0; this.skipped = 0;
+    this.on = true; this.lastSent = null; this.prevThumb = null; this.sent = 0; this.skipped = 0;
     shot.style.display = 'none'; againBtn.hidden = true; results.innerHTML = '';
     const [w, h] = sourceSize(); fitStageTo(w, h);
     liveBtn.classList.add('on'); liveBtn.textContent = 'Stop'; stage.classList.add('live');
-    this.timer = setInterval(() => this.tick(), Number($('interval').value));
+    this.timer = setInterval(() => this.tick(), intervalMs());
     setStatus('Live: sending a frame only when the scene changes.');
     renderHeader();
     this.tick();
@@ -384,6 +412,7 @@ const live = {
     if (!this.on) return;
     this.on = false; clearInterval(this.timer); this.timer = null;
     liveBtn.classList.remove('on'); liveBtn.textContent = 'Live'; stage.classList.remove('live');
+    drawOverlay(null);   // boxes belong to a frame that is no longer on screen
     setStatus(msg || `Live mode off. ${this.sent} frames sent, ${this.skipped} skipped as unchanged.`, bad);
     renderHeader();
   },
@@ -391,7 +420,10 @@ const live = {
     if (!this.on || this.inFlight || document.hidden) return;   // FR-3: one in flight; pause when hidden
     let thumb;
     try { thumb = thumbnail(); } catch { return; }
-    if (this.lastSent && meanAbsDiff(thumb, this.lastSent) < MOTION_THRESHOLD) { this.skipped++; return; }
+    const prev = this.prevThumb; this.prevThumb = thumb;
+    const still = !prev || meanAbsDiff(thumb, prev) < STILL_THRESHOLD;
+    const changed = !this.lastSent || meanAbsDiff(thumb, this.lastSent) >= SENSITIVITY[$('sensitivity').value];
+    if (!changed || !still) { this.skipped++; return; }   // unchanged view, or still moving: wait
     this.inFlight = true;
     try {
       const blob = await captureJpeg(false);
@@ -411,13 +443,14 @@ const live = {
   },
 };
 liveBtn.addEventListener('click', () => (live.on ? live.stop() : live.start()));
-$('interval').addEventListener('change', () => { if (live.on) { clearInterval(live.timer); live.timer = setInterval(() => live.tick(), Number($('interval').value)); } });
+function intervalMs() { const v = Number($('interval').value); return v >= 250 ? v : 1500; }   // never a zero-delay loop
+$('interval').addEventListener('change', () => { if (live.on) { clearInterval(live.timer); live.timer = setInterval(() => live.tick(), intervalMs()); } });
 document.addEventListener('visibilitychange', () => { if (live.on) setStatus(document.hidden ? 'Live paused (tab hidden).' : 'Live resumed.'); });
 
 /* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
 window.lens = {
   setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
-  live, drawOverlay, postScan, meanAbsDiff, thumbnail, MOTION_THRESHOLD,
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera,
 };
 
 startCamera();

@@ -95,3 +95,18 @@ async def test_invalid_values_are_sent_back_for_retry_then_accepted(frame):
     outcome = await scan(build_agent(FunctionModel(fake)), frame)
     assert outcome.result.objects[0].confidence == 0.7
     assert attempts == []  # both scripted replies were consumed: validation error triggered the retry
+
+
+async def test_live_frames_ask_for_brief_output(frame):
+    from app.agent import LIVE_HINT, _prompt
+
+    assert LIVE_HINT.strip() in _prompt(frame, None, brief=True)[0]
+    assert LIVE_HINT.strip() not in _prompt(frame, None)[0]
+
+
+def test_scan_settings_turn_thinking_off():
+    from app.agent import SCAN_MODEL_SETTINGS, build_agent
+    from pydantic_ai.models.test import TestModel
+
+    assert SCAN_MODEL_SETTINGS["thinking"] is False
+    assert build_agent(TestModel()).model_settings == SCAN_MODEL_SETTINGS
