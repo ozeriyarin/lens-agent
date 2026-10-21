@@ -40,7 +40,9 @@ from pydantic_ai.exceptions import UserError
 from app.agent import MAX_QUESTION_CHARS, AgentFailed, build_agent
 from app.budget import Budget, BudgetExceeded, ModelStats, SpendEntry
 from app.config import Settings
+from app.embeddings import Embeddings, hashing_embed
 from app.gate import BadImage, ScanCache, prepare
+from app.memory import Entity, Memory
 from app.router import Router
 from app.schema import ScanResponse, ScanResult
 
@@ -59,11 +61,14 @@ class Services:
     cache: ScanCache[ScanResponse]
     router: Router
     model_name: str
+    memory: Memory
 
 
 class StatsResponse(BaseModel):
     model: str
     escalation_model: str | None
+    memory: bool
+    entities: int
     cap_usd: float
     month_to_date_usd: float
     remaining_usd: float
@@ -124,6 +129,12 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         primary_name = _model_label(chosen_model)
         # Demo mode and injected fake models never escalate: the second tier is a real-key feature.
         escalation, escalation_name = (None, "") if not isinstance(chosen_model, str) else _build_escalation(settings)
+        # Memory (004): real embeddings with a real model, the offline hashing embedder otherwise,
+        # so demo mode shows "known" badges without a key. Same SQLite file as the ledger.
+        embeddings = None
+        if settings.memory:
+            embeddings = (Embeddings(settings.embedding_model, budget) if isinstance(chosen_model, str)
+                          else Embeddings("hashing", budget, embed_fn=hashing_embed))
         app.state.services = Services(
             settings=settings,
             budget=budget,
@@ -135,6 +146,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
                 escalate_below=settings.escalate_below,
             ),
             model_name=primary_name,
+            memory=Memory(settings.db_path, embeddings, threshold=settings.memory_threshold),
         )
         yield
 
@@ -193,14 +205,18 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             return hit.model_copy(update={"cached": True, "cost_usd": 0.0, "latency_ms": 0})
 
         # The router does reserve -> scan -> settle/fail for each tier (001 FR-5/FR-6, 002 FR-1/FR-2).
+        # Memory context (004 FR-6) is read before the scan and only used with a question.
+        context = svc.memory.context() if (question and svc.memory.enabled) else None
         try:
-            routed = await svc.router.run(frame, question, source=source)
+            routed = await svc.router.run(frame, question, source=source, context=context or None)
         except BudgetExceeded as e:
             raise HTTPException(402, str(e)) from e
         except AgentFailed as e:
             # Generic on purpose: the detail is in the server log (see agent.scan).
             raise HTTPException(502, "the model could not produce a valid result; try again") from e
 
+        # Memory (004): link detections to known entities. After the scan, never fatal.
+        entities = await svc.memory.link(routed.result, routed.request_id, source=source)
         response = ScanResponse(
             result=routed.result,
             cached=False,
@@ -210,6 +226,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             escalated=routed.escalated,
             cost_usd=routed.cost_usd,
             latency_ms=routed.latency_ms,
+            entities=entities,
         )
         # An empty result ("nothing identifiable") is not cached: a repeated near-identical
         # frame deserves a fresh look, since blur or a bad exposure may have cleared by then.
@@ -223,6 +240,8 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         return StatsResponse(
             model=svc.model_name,
             escalation_model=svc.router.escalation_model or None,
+            memory=svc.memory.enabled,
+            entities=svc.memory.count(),
             cap_usd=svc.budget.cap_usd,
             month_to_date_usd=svc.budget.month_to_date(),
             remaining_usd=svc.budget.remaining(),
@@ -234,6 +253,21 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             per_model=svc.budget.per_model(),
             recent=entries[-20:],
         )
+
+    # --- memory (004 FR-7) ---------------------------------------------------------------
+
+    @app.get("/entities", response_model=list[Entity])
+    def list_entities(svc: Svc) -> list[Entity]:
+        return svc.memory.list()
+
+    @app.delete("/entities/{entity_id}", status_code=204)
+    def forget_entity(svc: Svc, entity_id: str) -> None:
+        if not svc.memory.forget(entity_id):
+            raise HTTPException(404, "no such entity")
+
+    @app.delete("/entities")
+    def forget_all_entities(svc: Svc) -> dict[str, int]:
+        return {"forgotten": svc.memory.forget_all()}
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:

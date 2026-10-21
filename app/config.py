@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 DEFAULT_MODEL = "google:gemini-2.5-flash"
 DEFAULT_ESCALATION_MODEL = "anthropic:claude-haiku-4-5"
 DEFAULT_ESCALATE_BELOW = 0.6
+DEFAULT_EMBEDDING_MODEL = "google:gemini-embedding-001"
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,10 @@ class Settings:
     escalation_model: str = DEFAULT_ESCALATION_MODEL
     # A primary result whose best object confidence is below this is "weak".
     escalate_below: float = DEFAULT_ESCALATE_BELOW
+    # Feature 004: entity memory. MEMORY=off disables it; embeddings go through the budget.
+    memory: bool = True
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    memory_threshold: float = 0.86
 
     @classmethod
     def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
@@ -44,4 +49,7 @@ class Settings:
             scan_token=os.getenv("SCAN_TOKEN", "").strip(),
             escalation_model=os.getenv("ESCALATION_MODEL", DEFAULT_ESCALATION_MODEL).strip(),
             escalate_below=float(os.getenv("ESCALATE_BELOW", str(DEFAULT_ESCALATE_BELOW))),
+            memory=os.getenv("MEMORY", "on").strip().lower() not in ("off", "0", "false", "no"),
+            embedding_model=os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip(),
+            memory_threshold=float(os.getenv("MEMORY_THRESHOLD", "0.86")),
         )

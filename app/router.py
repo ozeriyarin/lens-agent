@@ -80,13 +80,13 @@ class Router:
         return self.escalation is not None
 
     async def _paid_call(self, agent: Agent[None, ScanResult], model: str, frame: PreparedFrame,
-                         question: str | None, tier: str, source: str):
+                         question: str | None, tier: str, source: str, context: str | None = None):
         """reserve -> scan -> settle, returning (outcome, ledger entry). Raises on any failure
         after marking the reservation failed; raises BudgetExceeded before any call."""
         request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier, source=source)
         started = time.perf_counter()
         try:
-            outcome = await scan(agent, frame, question, brief=(source == "live"))
+            outcome = await scan(agent, frame, question, brief=(source == "live"), context=context)
         except AgentFailed as e:
             self.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens,
                              latency_ms=int((time.perf_counter() - started) * 1000))
@@ -102,8 +102,11 @@ class Router:
         )
         return outcome, entry
 
-    async def run(self, frame: PreparedFrame, question: str | None = None, source: str = "tap") -> Routed:
-        outcome, entry = await self._paid_call(self.primary, self.primary_model, frame, question, "primary", source)
+    async def run(self, frame: PreparedFrame, question: str | None = None, source: str = "tap",
+                  context: str | None = None) -> Routed:
+        """`context` (feature 004) is memory's summary of recently seen entities; it only
+        reaches the model together with a question."""
+        outcome, entry = await self._paid_call(self.primary, self.primary_model, frame, question, "primary", source, context)
         routed = Routed(
             result=outcome.result,
             model=self.primary_model,
@@ -118,7 +121,7 @@ class Router:
 
         try:
             outcome2, entry2 = await self._paid_call(
-                self.escalation, self.escalation_model, frame, question, "escalation", source  # type: ignore[arg-type]
+                self.escalation, self.escalation_model, frame, question, "escalation", source, context  # type: ignore[arg-type]
             )
         except BudgetExceeded as e:
             log.info("escalation skipped, budget: %s", e)

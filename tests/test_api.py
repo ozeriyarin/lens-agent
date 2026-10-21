@@ -207,3 +207,46 @@ def test_empty_results_are_not_cached(tmp_path):
         again = post_scan(client, recapture(make_scene(13))).json()
         assert first["result"]["objects"] == [] and again["cached"] is False
         assert len(Budget(settings.db_path, 5).entries()) == 2  # looked again, paid again
+
+
+# --- feature 004 -------------------------------------------------------------------
+
+
+def desk_with_identity(identity="white ceramic mug, blue rim, chipped handle"):
+    return TestModel(custom_output_args={"scene": "desk", "objects": [
+        {"label": "coffee mug", "category": "other", "confidence": 0.9, "identity": identity},
+        {"label": "man", "category": "person", "confidence": 0.8}]})
+
+
+def test_scan_links_entities_and_second_scan_is_known(tmp_path):
+    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", cache_size=8, memory_threshold=0.65)
+    client = TestClient(create_app(settings, model=desk_with_identity()))
+    with client:
+        first = post_scan(client, make_scene(21)).json()
+        assert first["entities"][0]["known"] is False and first["entities"][0]["sightings"] == 1
+        assert first["entities"][1] is None  # people are never remembered
+        # a different frame (cache miss), same object described slightly differently
+        client.app.state.services.router.primary = client.app.state.services.router.primary  # (unchanged model)
+        second = post_scan(client, make_scene(22)).json()
+        assert second["entities"][0]["known"] is True and second["entities"][0]["id"] == first["entities"][0]["id"]
+        s = client.get("/stats").json()
+        assert s["memory"] is True and s["entities"] == 1
+        assert any(e["tier"] == "embedding" for e in s["recent"])  # embeddings are on the ledger
+        ents = client.get("/entities").json()
+        assert len(ents) == 1 and ents[0]["identity"].startswith("white ceramic mug")
+        assert client.delete(f"/entities/{ents[0]['id']}").status_code == 204
+        assert client.delete("/entities/nope").status_code == 404
+        assert client.get("/entities").json() == []
+        post_scan(client, make_scene(23))
+        assert client.delete("/entities").json() == {"forgotten": 1}
+
+
+def test_memory_off_gives_no_entities(tmp_path):
+    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", memory=False)
+    client = TestClient(create_app(settings, model=desk_with_identity()))
+    with client:
+        body = post_scan(client, make_scene(24)).json()
+        assert body["entities"] == [None, None]
+        s = client.get("/stats").json()
+        assert s["memory"] is False and s["entities"] == 0
+        assert all(e["tier"] != "embedding" for e in s["recent"])
