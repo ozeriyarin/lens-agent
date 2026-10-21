@@ -1,6 +1,6 @@
 # Feature 006: Evals — measure the agent, not just test the code
 
-**Status**: Draft | **Created**: 2026-10-21
+**Status**: Done (2026-10-21; baseline eval/runs/20261021T160725Z-baseline.json: recall 0.853, 0 forbid hits, answers 3/3) | **Created**: 2026-10-21
 
 ## Why
 Three features in, every judgement about the agent ("boxes are tighter now", "the remote
@@ -58,6 +58,13 @@ A run is made offline against the fake model to check the scorer itself (CI, lat
 - FR-8 **Discipline.** CLAUDE.md says: any change to `INSTRUCTIONS`, `LIVE_HINT`,
   `SCAN_MODEL_SETTINGS`, the model strings, `ESCALATE_BELOW` or the schema is committed with the
   eval summary in the message.
+
+## Findings from the baseline
+- Generic labels are the main miss: the tahini jar came back as "container" / "spice jar", the
+  mustard as "container". Candidate instruction change for a later run: ask for brand or
+  contents when readable. Not changed here, so the baseline stays the baseline.
+- Eggs are listed individually ("egg" x6) in one photo and as one "eggs" in others; the set
+  tolerates both via aliases, and the count question was still answered right.
 
 ## Non-goals (this feature)
 A labelling UI; crowd labels; a benchmark against other products; CI wiring (007).

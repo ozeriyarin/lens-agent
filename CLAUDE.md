@@ -36,7 +36,7 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RAG → 007 Docker/CI/observability → 008 Pi.
 - 004 entity memory — vector store of seen entities, "same mug as yesterday"
 - 005 RAG tool — `lookup(label)` over a small knowledge base
-- 006 evals — 50 labeled photos, scored on every prompt/model change
+- **006 evals** — labelled set (7 photos to start, bootstrap command to grow it), scorer, runner, compare; baseline recall 0.853. *(done 2026-10-21)*
 - 007 Docker Compose, CI, observability (traces, tokens, latency, cost)
 - 008 Raspberry Pi client (optional)
 
