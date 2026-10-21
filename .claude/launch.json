@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lens-agent-demo",
+      "runtimeExecutable": "C:\ai-projects\lens-agent\.venv\Scripts\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8000"],
+      "port": 8000,
+      "env": { "MODEL": "test", "DB_PATH": "demo.db", "PYDANTIC_AI_NO_BANNER": "1" }
+    }
+  ]
+}

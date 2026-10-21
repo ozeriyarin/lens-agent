@@ -67,18 +67,23 @@ class BBox(BaseModel):
         return self
 
 
-class Estimate(BaseModel):
-    """A guess plus how sure the model is about it (constitution IV)."""
+class MoodEstimate(BaseModel):
+    """A guess plus how sure the model is about it (constitution IV). Closed vocabulary."""
 
-    value: str
+    value: Mood
+    confidence: float = Field(ge=0, le=1)
+
+
+class AgeEstimate(BaseModel):
+    value: AgeRange
     confidence: float = Field(ge=0, le=1)
 
 
 class PersonDetails(BaseModel):
     """Only present when category == 'person'. Always estimates, never facts."""
 
-    mood: Estimate | None = None
-    age_range: Estimate | None = None
+    mood: MoodEstimate | None = None
+    age_range: AgeEstimate | None = None
 
 
 class DetectedObject(BaseModel):
@@ -107,3 +112,18 @@ class ScanResult(BaseModel):
     @property
     def is_empty(self) -> bool:
         return not self.objects
+
+
+class ScanResponse(BaseModel):
+    """What `POST /scan` returns: the agent's result plus what the call cost us.
+
+    `cached=True` means the gate matched a recent frame and no model was called;
+    cost is then 0 and `request_id` is the id of the original paid scan.
+    """
+
+    result: ScanResult
+    cached: bool
+    request_id: str
+    model: str
+    cost_usd: float = Field(ge=0)
+    latency_ms: int = Field(ge=0)

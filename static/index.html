@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<title>lens-agent</title>
+<style>
+  /* Single-file PWA, no build step (plan.md). Dark by default: it is a camera app. */
+  :root {
+    --bg: #111318; --panel: #1b1e26; --line: #2a2e3a; --text: #e8eaf0; --muted: #9aa0b0;
+    --accent: #5ac8fa; --ok: #4cd964; --warn: #ffb340; --bad: #ff5f57;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
+  #stats { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  #stage { position: relative; background: #000; border-radius: 14px; overflow: hidden; aspect-ratio: 3 / 4; }
+  video, canvas#shot { width: 100%; height: 100%; object-fit: cover; display: block; }
+  canvas#shot { position: absolute; inset: 0; display: none; }
+  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  .box { position: absolute; border: 2px solid var(--accent); border-radius: 6px; }
+  .box span { position: absolute; left: -2px; top: -22px; background: var(--accent); color: #000;
+    font-size: 12px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+  form { display: flex; gap: 8px; margin: 12px 0; }
+  input[type=text] { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font-size: 16px; }
+  button { padding: 12px 18px; border-radius: 12px; border: 0; background: var(--accent); color: #000;
+    font-weight: 600; font-size: 16px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+  #status { min-height: 22px; font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+  #status.bad { color: var(--bad); }
+  .scene { color: var(--muted); font-size: 14px; margin: 4px 0 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .card h3 { margin: 0 0 4px; font-size: 17px; display: flex; justify-content: space-between; gap: 8px; }
+  .card h3 small { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .answer { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .est { font-size: 13px; color: var(--muted); }
+  .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+  .badge.cached { background: #1f3b2a; color: var(--ok); }
+  .badge.paid { background: #3b2f1f; color: var(--warn); }
+  .empty { text-align: center; color: var(--muted); padding: 24px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>lens-agent</h1>
+    <div id="stats" title="month-to-date spend / cap">…</div>
+  </header>
+
+  <div id="stage">
+    <video id="cam" autoplay playsinline muted></video>
+    <canvas id="shot"></canvas>
+    <div id="overlay"></div>
+  </div>
+
+  <form id="scanForm">
+    <input id="question" type="text" maxlength="500" placeholder="Optional question, e.g. is this plant healthy?" autocomplete="off">
+    <button id="scanBtn" type="submit" disabled>Scan</button>
+    <button id="againBtn" type="button" class="secondary" hidden>Again</button>
+  </form>
+  <div id="status">Starting camera…</div>
+
+  <section id="results"></section>
+</main>
+
+<script>
+/* Flow (spec FR-1, FR-7):
+   1. getUserMedia opens the rear camera. Needs HTTPS or localhost, hence the dev tunnel.
+   2. "Scan" draws the current video frame onto a canvas and encodes a JPEG blob.
+      The server downsizes again to <=1024px, so we only cap at 1280 here to keep the upload small.
+   3. POST /scan (multipart: image, question). The reply is a ScanResponse: result + cost + cached flag.
+   4. One card per DetectedObject; bbox (optional) is drawn over the frozen frame as a normalized rect. */
+
+const $ = (id) => document.getElementById(id);
+const video = $('cam'), shot = $('shot'), overlay = $('overlay');
+const scanBtn = $('scanBtn'), againBtn = $('againBtn'), statusEl = $('status'), results = $('results');
+const MAX_UPLOAD_SIDE = 1280;
+
+/* Shared secret (SCAN_TOKEN on the server). Open the page once as
+   https://host/#token=... on the phone. The fragment never leaves the browser
+   (not sent to the server, not in tunnel/server logs); it is moved into
+   localStorage and scrubbed from the address bar. */
+const TOKEN_KEY = 'lens.token';
+(function adoptTokenFromFragment() {
+  const m = /(?:^#|&)token=([^&]+)/.exec(location.hash);
+  if (m) {
+    try { localStorage.setItem(TOKEN_KEY, decodeURIComponent(m[1])); } catch {}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+})();
+function authHeaders() {
+  let t = null;
+  try { t = localStorage.getItem(TOKEN_KEY); } catch {}
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+function setStatus(text, bad = false) { statusEl.textContent = text; statusEl.className = bad ? 'bad' : ''; }
+
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus('Camera API unavailable. Open this page over HTTPS (or localhost).', true);
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+    scanBtn.disabled = false;
+    setStatus('Point at a scene and tap Scan.');
+  } catch (err) {
+    setStatus(`Camera blocked: ${err.message}. Allow camera access and reload.`, true);
+  }
+}
+
+function captureJpeg() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw) throw new Error('camera not ready');
+  const scale = Math.min(1, MAX_UPLOAD_SIDE / Math.max(vw, vh));
+  shot.width = Math.round(vw * scale); shot.height = Math.round(vh * scale);
+  shot.getContext('2d').drawImage(video, 0, 0, shot.width, shot.height);
+  shot.style.display = 'block';               // freeze the frame the result refers to
+  return new Promise((resolve) => shot.toBlob(resolve, 'image/jpeg', 0.85));
+}
+
+function fmtUsd(v) { return v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`; }
+
+async function refreshStats() {
+  try {
+    const res = await fetch('/stats', { headers: authHeaders() });
+    if (res.status === 401) { setStatus('This server needs a token: open the page as /#token=YOUR_TOKEN once.', true); return; }
+    const s = await res.json();
+    $('stats').textContent = `${fmtUsd(s.month_to_date_usd)} / $${s.cap_usd.toFixed(0)} · ${s.model}`;
+  } catch { $('stats').textContent = ''; }
+}
+
+function estimate(e, label) {
+  if (!e) return '';
+  return `<div class="est">${label}: ${escapeHtml(e.value)} <span class="meta">(estimate, ${Math.round(e.confidence * 100)}% sure)</span></div>`;
+}
+
+function render(resp) {
+  const r = resp.result;
+  overlay.innerHTML = '';
+  const badge = resp.cached
+    ? '<span class="badge cached">cached · free</span>'
+    : `<span class="badge paid">${fmtUsd(resp.cost_usd)} · ${resp.latency_ms} ms</span>`;
+  let html = `<div class="scene">${escapeHtml(r.scene)} ${badge}</div>`;
+  if (r.answer) html += `<div class="card"><div class="answer">${escapeHtml(r.answer)}</div></div>`;
+  if (!r.objects.length) html += '<div class="empty">Nothing identifiable in this frame.</div>';
+  for (const o of r.objects) {
+    html += `<div class="card">
+      <h3>${escapeHtml(o.label)} <small>${escapeHtml(o.category)} · ${escapeHtml(o.position.replace('_', ' '))} · ${Math.round(o.confidence * 100)}%</small></h3>
+      ${o.person ? estimate(o.person.mood, 'Mood') + estimate(o.person.age_range, 'Age') : ''}
+      ${o.answer ? `<div class="answer">${escapeHtml(o.answer)}</div>` : ''}
+    </div>`;
+    if (o.bbox) {
+      const b = document.createElement('div');
+      b.className = 'box';
+      b.style.left = `${o.bbox.x * 100}%`; b.style.top = `${o.bbox.y * 100}%`;
+      b.style.width = `${o.bbox.w * 100}%`; b.style.height = `${o.bbox.h * 100}%`;
+      b.innerHTML = `<span>${escapeHtml(o.label)}</span>`;
+      overlay.appendChild(b);
+    }
+  }
+  results.innerHTML = html;
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+$('scanForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  scanBtn.disabled = true;
+  setStatus('Scanning…');
+  try {
+    const blob = await captureJpeg();
+    const form = new FormData();
+    form.append('image', blob, 'frame.jpg');
+    const q = $('question').value.trim();
+    if (q) form.append('question', q);
+    const res = await fetch('/scan', { method: 'POST', body: form, headers: authHeaders() });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => ({}))).detail;
+      throw new Error(`${res.status}: ${typeof detail === 'string' ? detail : 'request failed'}`);
+    }
+    render(await res.json());
+    setStatus('Done. Tap Again for a new frame.');
+    againBtn.hidden = false;
+  } catch (err) {
+    setStatus(err.message, true);
+    scanBtn.disabled = false;
+  }
+  refreshStats();
+});
+
+againBtn.addEventListener('click', () => {
+  shot.style.display = 'none'; overlay.innerHTML = ''; results.innerHTML = '';
+  againBtn.hidden = true; scanBtn.disabled = false;
+  setStatus('Point at a scene and tap Scan.');
+});
+
+startCamera();
+refreshStats();
+</script>
+</body>
+</html>
