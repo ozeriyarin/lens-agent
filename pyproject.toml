@@ -18,10 +18,12 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "httpx>=0.28",
+    "pytest-asyncio>=0.24",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["hatchling"]
