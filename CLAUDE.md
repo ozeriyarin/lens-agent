@@ -29,7 +29,7 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 
 ## Roadmap (one Spec Kit feature each)
 - **001 scan-frame** — tap to scan, typed objects, dedupe gate, budget guard, cost log. *(done 2026-10-21)*
-- **002 smart-routing** — Gemini first, escalate to Haiku on weak results or unanswered questions; calibrated estimates from the ledger; per-model stats + panel in the page; provider spend limits documented. *(spec in specs/002-smart-routing/)*
+- **002 smart-routing** — Gemini first, escalate to Haiku on weak results or unanswered questions; calibrated estimates from the ledger; per-model stats + panel in the page; provider spend limits documented. *(done 2026-10-21)*
 - 003 live mode + overlays — frame every 1–2 s, gate drops unchanged scenes, bbox overlays on `<canvas>` **with the detection data (label, confidence, person estimates) drawn on the frame itself**; optional tiny YOLO for tight boxes
 - 004 entity memory — vector store of seen entities, "same mug as yesterday"
 - 005 RAG tool — `lookup(label)` over a small knowledge base

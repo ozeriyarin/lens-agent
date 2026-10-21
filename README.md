@@ -34,7 +34,7 @@ a browser, and for real scans a Gemini or Anthropic API key.
 
 ```bash
 uv sync                      # creates .venv with Python 3.12 and all deps
-uv run pytest                # 51 tests, no network needed
+uv run pytest                # ~80 tests, no network needed
 ```
 
 ### 1. Demo mode, no key, no spend
@@ -62,8 +62,25 @@ uv run uvicorn app.main:app --port 8000
 | `SCAN_TOKEN` | empty | Shared secret for `/scan` and `/stats`. **Set it before tunnelling.** |
 | `CACHE_SIZE` | `32` | How many recent scenes the dedupe cache remembers. |
 
-Also set a spend limit on the provider's billing page. The in-code cap is the first
-line of defence, the provider limit is the second.
+| `ESCALATION_MODEL` | `anthropic:claude-haiku-4-5` | Second tier (feature 002). Empty disables escalation. Needs `ANTHROPIC_API_KEY`; without it escalation is silently off. |
+| `ESCALATE_BELOW` | `0.6` | A primary result whose best object confidence is below this escalates. |
+
+### Second line of defence: provider spend limits
+
+The in-code cap stops *this* program from spending more than `BUDGET_USD`. It cannot stop
+a leaked key, a second deployment pointed at the same account, or a bug in the estimate.
+So set a hard limit at each provider too; takes two minutes and makes the worst case a
+known number:
+
+- **Google AI Studio / Gemini API**: [Google Cloud Console → Billing → Budgets & alerts](https://console.cloud.google.com/billing/budgets).
+  Create a budget for the project, e.g. 5 USD/month with alerts at 50 / 90 / 100 %. Note that a
+  Cloud *budget* only alerts; to actually cut off, keep the key on the free tier (no billing
+  account attached) or add a budget action that disables billing.
+- **Anthropic**: [Console → Settings → Limits](https://console.anthropic.com/settings/limits).
+  Set the monthly spend limit (e.g. 5 USD). This one is a real cut-off.
+
+Rule of thumb from the constitution: the code refuses *before* a call, the provider limit
+refuses *regardless* of the code. You want both.
 
 ### 3. On the phone
 
@@ -88,11 +105,20 @@ local storage and strips it from the address bar. Allow camera access, point, ta
 - `GET /stats` cap, month-to-date, remaining, cache hit/miss counters, recent ledger rows.
 - `GET /` the PWA. Interactive API docs at `/docs`.
 
+## Routing (feature 002)
+
+Every scan runs on `MODEL` first. If the result is *weak* (no objects, best confidence below
+`ESCALATE_BELOW`, or a question nobody answered) and `ESCALATION_MODEL` is configured, the same
+frame is sent once more to the escalation tier and that result is returned, with `escalated: true`
+and both calls in `cost_usd`. Escalation never runs when the primary call failed, when the budget
+cannot cover it, or in demo mode. Tap the cost in the page header for per-model stats.
+
 ## Cost model
 
-Before a scan the ledger reserves a rounded-up estimate (`app/budget.py`,
-`SCAN_ESTIMATE_TOKENS`). After the scan the reservation is replaced by the real
-token counts priced from `PRICES_USD_PER_MTOK`. If the model fails after the
+Before a scan the ledger reserves an estimate: the highest cost among the model's last 20
+settled calls times 1.25, or the fixed `SCAN_ESTIMATE_TOKENS` table until there are 3 such calls
+(`app/budget.py`). After the scan the reservation is replaced by the real token counts priced
+from `PRICES_USD_PER_MTOK`. If the model fails after the
 request went out, the larger of estimate and observed usage stays charged. The
 reserve step runs inside a `BEGIN IMMEDIATE` transaction so concurrent scans
 cannot both slip under the cap.
@@ -104,6 +130,7 @@ app/schema.py   DetectedObject, ScanResult, ScanResponse   (the contract)
 app/gate.py     prepare() + ScanCache                        (resize, pHash, LRU)
 app/budget.py   Budget: reserve / settle / fail, SQLite     (the cap)
 app/agent.py    build_agent(), scan()                        (Pydantic AI)
+app/router.py   is_weak(), Router.run()                      (cheap first, escalate once)
 app/main.py     FastAPI composition, /scan, /stats           (the wiring)
 app/config.py   Settings.from_env()
 static/         index.html, the whole client

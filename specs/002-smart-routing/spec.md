@@ -1,6 +1,6 @@
 # Feature 002: Smart routing — cheap model first, escalate only when needed
 
-**Status**: Draft | **Created**: 2026-10-21
+**Status**: Done (manual checks passed 2026-10-21: clear photo stayed on Gemini, dark photo escalated to Haiku; stats panel matches /stats) | **Created**: 2026-10-21
 
 ## Why
 Feature 001 sends every scan to one model. Constitution III says *cheapest capable model

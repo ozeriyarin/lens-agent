@@ -195,7 +195,8 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         except BudgetExceeded as e:
             raise HTTPException(402, str(e)) from e
         except AgentFailed as e:
-            raise HTTPException(502, f"model could not produce a valid result: {e}") from e
+            # Generic on purpose: the detail is in the server log (see agent.scan).
+            raise HTTPException(502, "the model could not produce a valid result; try again") from e
 
         response = ScanResponse(
             result=routed.result,

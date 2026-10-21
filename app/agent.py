@@ -15,6 +15,7 @@ object (tests pass `TestModel`).
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 
@@ -24,6 +25,8 @@ from pydantic_ai.usage import RunUsage, UsageLimits
 
 from app.gate import PreparedFrame
 from app.schema import ScanResult
+
+log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
 You are a careful vision assistant. You receive one photo from a phone camera and
@@ -114,8 +117,13 @@ async def scan(agent: Agent[None, ScanResult], frame: PreparedFrame, question: s
     except Exception as e:
         # Any failure after the request went out (schema retries exhausted, usage limit,
         # provider 5xx on the retry, transport error) must carry the tokens already spent,
-        # or the ledger under-charges the attempt.
-        raise AgentFailed(str(e), input_tokens=usage.input_tokens or 0, output_tokens=usage.output_tokens or 0) from e
+        # or the ledger under-charges the attempt. The detail is logged here; the message
+        # that reaches the client is only the error class, so provider request ids, URLs
+        # or prompt fragments never leak through a 502 body.
+        log.warning("scan failed after %s/%s tokens: %s: %s", usage.input_tokens, usage.output_tokens,
+                    type(e).__name__, str(e)[:500])
+        raise AgentFailed(type(e).__name__, input_tokens=usage.input_tokens or 0,
+                          output_tokens=usage.output_tokens or 0) from e
     usage = run.usage
     return ScanOutcome(
         result=run.output,
