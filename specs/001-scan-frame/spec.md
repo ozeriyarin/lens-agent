@@ -1,6 +1,6 @@
 # Feature 001: Scan a frame and return typed objects
 
-**Status**: Implemented (T7/T8 manual checks pending) | **Created**: 2026-10-21 | **Updated**: 2026-10-21
+**Status**: Done (manual checks passed 2026-10-21: real Gemini scan, phone over ngrok) | **Created**: 2026-10-21 | **Updated**: 2026-10-21
 
 ## User scenarios
 

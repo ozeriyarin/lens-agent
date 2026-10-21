@@ -71,6 +71,8 @@ Browsers only expose the camera over HTTPS, so expose localhost through a tunnel
 
 ```bash
 cloudflared tunnel --url http://localhost:8000
+# or, if you already use ngrok:
+ngrok http 8000
 ```
 
 Set `SCAN_TOKEN` in `.env` first, then open the tunnel URL on the phone **once** as

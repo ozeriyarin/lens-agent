@@ -7,5 +7,5 @@
 - [x] T5 API: `POST /scan`, `GET /stats`, static hosting (app/main.py)
 - [x] T6 PWA: camera, scan button, question box, result cards (static/index.html)
 - [x] T7 Run locally with a real key, scan a desk, verify ledger rows
-- [ ] T8 Tunnel to phone over HTTPS, verify camera works on mobile
+- [x] T8 Tunnel to phone over HTTPS, verify camera works on mobile
 - [x] T9 Write README "how to run" from a clean machine
