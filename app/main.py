@@ -107,8 +107,10 @@ def _demo_model() -> Model:
             "scene": "demo mode: a desk with a laptop and a mug (no real model was called)",
             "objects": [
                 {"label": "laptop", "category": "electronics", "position": "on_table", "confidence": 0.95,
-                 "bbox": {"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.4}},
-                {"label": "coffee mug", "category": "other", "position": "on_table", "confidence": 0.8},
+                 "bbox": {"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.4},
+                 "identity": "silver 14-inch laptop with a round blue sticker on the lid"},
+                {"label": "coffee mug", "category": "other", "position": "on_table", "confidence": 0.8,
+                 "identity": "white ceramic mug with a blue rim and a chipped handle"},
                 {"label": "person", "category": "person", "position": "sitting", "confidence": 0.7,
                  "person": {"mood": {"value": "neutral", "confidence": 0.5},
                             "age_range": {"value": "adult", "confidence": 0.6}}},
@@ -256,17 +258,29 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
 
     # --- memory (004 FR-7) ---------------------------------------------------------------
 
+    def memory_access(svc: Svc, request: Request) -> Services:
+        """Memory is personal data. With SCAN_TOKEN set the bearer check above already
+        applies. Without one, these routes answer only to the local machine (no proxy
+        header, loopback client), so a tunnel or LAN exposure cannot read or wipe it."""
+        if not svc.settings.scan_token:
+            host = request.client.host if request.client else ""
+            if host not in ("127.0.0.1", "::1", "testclient") or request.headers.get("x-forwarded-for"):
+                raise HTTPException(401, "set SCAN_TOKEN to access memory from outside this machine")
+        return svc
+
+    Mem = Annotated[Services, Depends(memory_access)]
+
     @app.get("/entities", response_model=list[Entity])
-    def list_entities(svc: Svc) -> list[Entity]:
+    def list_entities(svc: Mem) -> list[Entity]:
         return svc.memory.list()
 
     @app.delete("/entities/{entity_id}", status_code=204)
-    def forget_entity(svc: Svc, entity_id: str) -> None:
+    def forget_entity(svc: Mem, entity_id: str) -> None:
         if not svc.memory.forget(entity_id):
             raise HTTPException(404, "no such entity")
 
     @app.delete("/entities")
-    def forget_all_entities(svc: Svc) -> dict[str, int]:
+    def forget_all_entities(svc: Mem) -> dict[str, int]:
         return {"forgotten": svc.memory.forget_all()}
 
     @app.get("/", include_in_schema=False)

@@ -14,6 +14,7 @@ mode counts visits, not frames.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -47,6 +48,11 @@ class Entity:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _clean(text: str, limit: int) -> str:
+    """One line, no control characters or angle brackets, capped (prompt-safety for stored text)."""
+    return re.sub(r"[\x00-\x1f<>;]+", " ", text).strip()[:limit]
 
 
 def _row(r: tuple) -> Entity:
@@ -203,7 +209,10 @@ class Memory:
             ).fetchall()
         lines = []
         for e in map(_row, rows):
-            lines.append(f"{e.label} ({e.identity}): seen {e.sightings}x since {e.first_seen.date()}, last {e.last_position}")
+            # Identity text came from the model (and from whatever is printed on objects):
+            # keep it one line, short, free of markup before it goes near a prompt.
+            ident = _clean(e.identity, 80)
+            lines.append(f"{_clean(e.label, 40)} ({ident}): seen {e.sightings}x since {e.first_seen.date()}, last {e.last_position}")
         return "; ".join(lines)
 
     # --- forgetting --------------------------------------------------------------------------

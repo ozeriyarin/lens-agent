@@ -125,6 +125,18 @@ along the bottom. The header shows live spend and a per-minute projection; a 401
 live mode with the reason. Nothing is recorded or stored: each frame lives in memory for one
 request.
 
+## Memory (feature 004)
+
+The agent remembers objects, not images. For every detected object the model writes an
+`identity` (what makes this one different: colour, brand, marks); the text is embedded
+(`EMBEDDING_MODEL`, default `google:gemini-embedding-001`, under the same budget) and matched
+against remembered entities of the same category (cosine ≥ `MEMORY_THRESHOLD`, default 0.86,
+with a near-tie treated as new). Cards and frame labels show "known · seen N×"; with a question,
+a summary of recently seen entities is given to the model as delimited data so "have you seen
+this before?" works. `GET /entities` lists memory, `DELETE /entities/{id}` or `/entities` forgets;
+these routes answer only locally unless `SCAN_TOKEN` is set. People are never remembered.
+`MEMORY=off` disables all of it.
+
 ## Evals (feature 006)
 
 Unit tests prove the code; evals measure the model. `eval/set.jsonl` lists photos (kept outside
@@ -162,6 +174,8 @@ app/gate.py     prepare() + ScanCache                        (resize, pHash, LRU
 app/budget.py   Budget: reserve / settle / fail, SQLite     (the cap)
 app/agent.py    build_agent(), scan()                        (Pydantic AI)
 app/router.py   is_weak(), Router.run()                      (cheap first, escalate once)
+app/memory.py   entities + sightings, link(), context()      (what the agent remembers)
+app/embeddings.py embed() under the ledger                  
 app/evals.py    eval set, scorer, runner, bootstrap, compare   (measure the model)
 app/main.py     FastAPI composition, /scan, /stats           (the wiring)
 app/config.py   Settings.from_env()

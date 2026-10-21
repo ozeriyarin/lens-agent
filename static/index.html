@@ -47,6 +47,16 @@
   .badge.cached { background: #1f3b2a; color: var(--ok); }
   .badge.paid { background: #3b2f1f; color: var(--warn); }
   .badge.esc { background: #3a1f3b; color: #e6a3ff; }
+  .badge.known { background: #1f2e3b; color: var(--accent); }
+  .badge.new { background: #2a2e3a; color: var(--muted); }
+  .panelbox { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; font-size: 14px; }
+  .panelbox[hidden] { display: none; }
+  .panelbox h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; gap: 8px; }
+  .panelbox h2 button, .panelbox td button { padding: 2px 10px; font-size: 13px; }
+  .panelbox table { width: 100%; border-collapse: collapse; margin: 6px 0 4px; }
+  .panelbox th, .panelbox td { text-align: left; padding: 4px; border-bottom: 1px solid var(--line); font-weight: 400; vertical-align: top; }
+  .panelbox th { color: var(--muted); font-size: 12px; }
+  #entitiesBtn { font-size: 13px; color: var(--muted); background: none; border: 0; padding: 0; text-decoration: underline dotted; cursor: pointer; }
   .empty { text-align: center; color: var(--muted); padding: 24px 0; }
   #panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; font-size: 14px; }
   #panel[hidden] { display: none; }
@@ -65,10 +75,11 @@
 <main>
   <header>
     <h1>lens-agent</h1>
-    <div id="stats" title="month-to-date spend / cap · tap for details">…</div>
+    <div><button id="entitiesBtn" type="button" title="what the agent remembers">memory</button> · <span id="stats" title="month-to-date spend / cap · tap for details">…</span></div>
   </header>
 
   <section id="panel" hidden></section>
+  <section id="entities" class="panelbox" hidden></section>
 
   <div id="stage">
     <video id="cam" autoplay playsinline muted></video>
@@ -316,23 +327,24 @@ function drawOverlay(resp, stale = false, tracked = null) {
   };
 
   const unboxed = [];
-  for (const o of r.objects) {
+  r.objects.forEach((o, oi) => {
     const pct = `${Math.round(o.confidence * 100)}%`;
-    const lines = [`${o.label} · ${pct}`];
+    const ent = (resp.entities || [])[oi];
+    const lines = [`${o.label} · ${pct}${ent && ent.known ? ` · seen ${ent.sightings}×` : ''}`];
     if (o.person) {
       if (o.person.mood) lines.push(`mood: ${o.person.mood.value} (~${Math.round(o.person.mood.confidence * 100)}%)`);
       if (o.person.age_range) lines.push(`age: ${o.person.age_range.value.replace('_', ' ')} (~${Math.round(o.person.age_range.confidence * 100)}%)`);
     }
     if (o.answer) lines.push(`→ ${o.answer}`);
     const box = tracked ? tracked.get(o) : o.bbox;   // tracked position if we have one, else the model's
-    if (box === null) continue;                        // tracked and lost: not on screen any more
-    if (!box) { unboxed.push(lines[0]); continue; }
+    if (box === null) return;                          // tracked and lost: not on screen any more
+    if (!box) { unboxed.push(lines[0]); return; }
     const x = box.x * W, y = box.y * H, w = box.w * W, h = box.h * H;
-    const color = o.category === 'person' ? '#ffb340' : '#5ac8fa';
+    const color = o.category === 'person' ? '#ffb340' : (ent && ent.known ? '#8fd3ff' : '#5ac8fa');
     g.strokeStyle = color; g.strokeRect(x, y, w, h);
     const block = lines.length * base * 1.25 + base * 0.6;
     label(lines, x, y - block < 0 ? y + g.lineWidth : y - block, color);   // above the box, or inside when at the top edge
-  }
+  });
   if (unboxed.length) label(['no box: ' + unboxed.join(', ')], base * 0.5, base * 0.5, '#e8eaf0');
 
   // Bottom line: scene sentence (+ answer), wrapped to at most two lines.
@@ -371,13 +383,18 @@ function renderCards(resp) {
   let html = `<div class="scene">${escapeHtml(r.scene)} ${badge}</div>`;
   if (r.answer) html += `<div class="card"><div class="answer">${escapeHtml(r.answer)}</div></div>`;
   if (!r.objects.length) html += '<div class="empty">Nothing identifiable in this frame.</div>';
-  for (const o of r.objects) {
+  r.objects.forEach((o, i) => {
+    const e = (resp.entities || [])[i];
+    const known = e ? (e.known
+      ? `<span class="badge known" title="first seen ${e.first_seen.slice(0, 10)}">known · seen ${e.sightings}×</span>`
+      : '<span class="badge new">new</span>') : '';
     html += `<div class="card">
-      <h3>${escapeHtml(o.label)} <small>${escapeHtml(o.category)} · ${escapeHtml(o.position.replace('_', ' '))} · ${Math.round(o.confidence * 100)}%</small></h3>
+      <h3>${escapeHtml(o.label)}${known} <small>${escapeHtml(o.category)} · ${escapeHtml(o.position.replace('_', ' '))} · ${Math.round(o.confidence * 100)}%</small></h3>
+      ${o.identity ? `<div class="meta">${escapeHtml(o.identity)}</div>` : ''}
       ${o.person ? estimate(o.person.mood, 'Mood') + estimate(o.person.age_range, 'Age') : ''}
       ${o.answer ? `<div class="answer">${escapeHtml(o.answer)}</div>` : ''}
     </div>`;
-  }
+  });
   results.innerHTML = html;
 }
 function showResponse(resp) {
@@ -490,6 +507,31 @@ function renderPanel(s) {
     <table><tr><th>time (UTC)</th><th>model</th><th class="num">tokens in/out</th><th class="num">cost</th></tr>${recent || '<tr><td colspan="4" class="meta">no scans yet</td></tr>'}</table>`;
   $('closePanel').onclick = () => { $('panel').hidden = true; };
 }
+/* Entities panel (004 FR-8): what the agent remembers, with Forget. */
+async function renderEntities() {
+  const box = $('entities');
+  let list = [];
+  try {
+    const res = await fetch('/entities', { headers: authHeaders() });
+    if (res.status === 401) { setStatus('This server needs a token: open the page as /#token=YOUR_TOKEN once.', true); return; }
+    list = await res.json();
+  } catch { list = []; }
+  const rows = list.map((e) => `<tr><td><b>${escapeHtml(e.label)}</b><div class="meta">${escapeHtml(e.identity)}</div></td>
+      <td>${e.sightings}×<div class="meta">${e.first_seen.slice(0, 10)} → ${e.last_seen.slice(5, 16).replace('T', ' ')}</div></td>
+      <td><button type="button" class="secondary" data-forget="${e.id}">forget</button></td></tr>`).join('');
+  box.innerHTML = `<h2>Memory · ${list.length} ${list.length === 1 ? 'entity' : 'entities'}
+      <span><button type="button" class="secondary" id="forgetAll" ${list.length ? '' : 'disabled'}>forget all</button>
+      <button type="button" class="secondary" id="closeEntities">close</button></span></h2>
+    ${rows ? `<table><tr><th>object</th><th>seen</th><th></th></tr>${rows}</table>` : '<div class="meta">Nothing remembered yet. Scan something with a distinctive look.</div>'}
+    <div class="meta">Only descriptions and embeddings are stored, never images. People are never remembered.</div>`;
+  box.querySelectorAll('[data-forget]').forEach((b) => b.addEventListener('click', async () => {
+    await fetch(`/entities/${encodeURIComponent(b.dataset.forget)}`, { method: 'DELETE', headers: authHeaders() }); renderEntities();
+  }));
+  $('forgetAll').onclick = async () => { if (confirm('Forget every remembered entity?')) { await fetch('/entities', { method: 'DELETE', headers: authHeaders() }); renderEntities(); } };
+  $('closeEntities').onclick = () => { box.hidden = true; };
+}
+$('entitiesBtn').addEventListener('click', () => { const box = $('entities'); box.hidden = !box.hidden; if (!box.hidden) renderEntities(); });
+
 $('stats').addEventListener('click', async () => {
   const panel = $('panel');
   if (!panel.hidden) { panel.hidden = true; return; }
@@ -588,7 +630,7 @@ document.addEventListener('visibilitychange', () => { if (live.on) setStatus(doc
 /* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
 window.lens = {
   setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
-  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse, setZoom, zoomState, cropRect,
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse, setZoom, zoomState, cropRect, renderEntities,
 };
 
 startCamera();
