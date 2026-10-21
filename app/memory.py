@@ -17,6 +17,7 @@ import logging
 import re
 import sqlite3
 import uuid
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -77,7 +78,7 @@ class Memory:
         self.threshold = threshold
         self.margin = margin
         self.min_gap = timedelta(seconds=min_gap_s)
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS entities (
@@ -146,7 +147,7 @@ class Memory:
         return refs
 
     def _link_one(self, o: DetectedObject, vec: np.ndarray, request_id: str, scene: str, now: datetime) -> EntityRef:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute(
                 f"SELECT {_ENTITY_COLS}, embedding, dim FROM entities WHERE category = ?", (o.category,)
             ).fetchall()
@@ -189,12 +190,12 @@ class Memory:
     # --- reading --------------------------------------------------------------------------
 
     def list(self, limit: int = 200) -> list[Entity]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute(f"SELECT {_ENTITY_COLS} FROM entities ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
         return [_row(r) for r in rows]
 
     def count(self) -> int:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             return int(conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0])
 
     def context(self, *, within_s: int = 300, limit: int = 8, now: datetime | None = None) -> str:
@@ -203,7 +204,7 @@ class Memory:
         scene, which is what "have you seen this before?" usually refers to."""
         now = now or _utcnow()
         since = (now - timedelta(seconds=within_s)).isoformat()
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute(
                 f"SELECT {_ENTITY_COLS} FROM entities WHERE last_seen >= ? ORDER BY last_seen DESC LIMIT ?", (since, limit)
             ).fetchall()
@@ -218,10 +219,10 @@ class Memory:
     # --- forgetting --------------------------------------------------------------------------
 
     def forget(self, entity_id: str) -> bool:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             cur = conn.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
             return cur.rowcount > 0
 
     def forget_all(self) -> int:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             return conn.execute("DELETE FROM entities").rowcount

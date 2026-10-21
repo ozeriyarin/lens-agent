@@ -180,3 +180,46 @@ def test_compare_prints_deltas():
     b = {**a, "fingerprint": "bbb", "summary": {**a["summary"], "mean_recall": 0.75, "latency_p50_ms": 900}}
     out = compare(a, b)
     assert "+0.2500" in out and "-100" in out and "mean_recall" in out
+
+
+# --- feature 004: identity metrics -------------------------------------------------------------
+
+
+def test_identity_rate_and_entity_links_per_photo():
+    item = EvalItem(id="a", file="a.jpg", expect=[Expected("beer", aliases=["heineken"], entity="heineken"), Expected("mug")])
+    result = ScanResult(scene="s", objects=[
+        DetectedObject(label="Heineken bottle", category="food", confidence=0.9, identity="green 330 ml Heineken"),
+        DetectedObject(label="mug", category="other", confidence=0.9),  # no identity
+        DetectedObject(label="man", category="person", confidence=0.9)])
+    s = score_photo(item, result, entity_ids=["ent-1", None, None])
+    assert s.identity_rate == pytest.approx(0.5)  # 1 of 2 non-person objects
+    assert s.entity_links == {"heineken": "ent-1"}
+
+
+def test_identity_metrics_recall_and_precision():
+    from app.evals import PhotoScore, identity_metrics
+
+    def ps(pid, links):
+        return PhotoScore(pid, "f", 1, 1, [], [], [], 1.0, None, None, 0, 0.0, False, "m", entity_links=links)
+
+    scores = [ps("p1", {"heineken": "A", "mustard": "M"}), ps("p2", {"heineken": "A"}), ps("p3", {"heineken": "B", "mustard": "M"})]
+    m = identity_metrics(scores)
+    assert m["entity_groups"] == 2
+    assert m["identity_recall"] == pytest.approx((1 + 0 + 0 + 1) / 4)  # heineken pairs: A-A ok, A-B no, A-B no; mustard M-M ok
+    assert m["identity_precision"] == 1.0  # heineken ids never equal mustard ids
+    assert identity_metrics([ps("x", {})]) == {"entity_groups": 0, "identity_recall": None, "identity_precision": None}
+
+
+async def test_run_reports_identity_metrics_offline(tmp_path, photos):
+    set_path = tmp_path / "set.jsonl"
+    set_path.write_text(
+        '{"id":"p0","file":"photo0.jpg","expect":[{"label":"laptop","entity":"lap"}]}\n'
+        '{"id":"p1","file":"photo1.jpg","expect":[{"label":"laptop","entity":"lap"}]}\n', encoding="utf-8")
+    model = TestModel(custom_output_args={"scene": "desk", "objects": [
+        {"label": "laptop", "category": "electronics", "confidence": 0.9, "identity": "silver laptop with a blue sticker"}]})
+    st = Settings(model="test", budget_usd=5.0, db_path=tmp_path / "u.db", escalation_model="", memory_threshold=0.65)
+    report = await run(set_path=set_path, photos=photos, model=model, settings=st, ledger=tmp_path / "l.db",
+                       runs_dir=tmp_path / "runs", write=False)
+    s = report["summary"]
+    assert s["identity_rate"] == 1.0 and s["entity_groups"] == 1 and s["identity_recall"] == 1.0
+    assert any(p["entity_links"].get("lap") for p in report["photos"])

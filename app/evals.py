@@ -36,7 +36,9 @@ from pydantic_ai.models import Model
 from app.agent import INSTRUCTIONS, LIVE_HINT, SCAN_MODEL_SETTINGS, AgentFailed, build_agent
 from app.budget import Budget, BudgetExceeded
 from app.config import Settings
+from app.embeddings import Embeddings, hashing_embed
 from app.gate import BadImage, prepare
+from app.memory import Memory
 from app.router import Router
 from app.schema import BBox, DetectedObject, ScanResult
 
@@ -59,6 +61,7 @@ class Expected:
     aliases: list[str] = field(default_factory=list)
     category: str | None = None
     box: list[int] | None = None  # [ymin, xmin, ymax, xmax] on 0..1000, like the model's box_2d
+    entity: str | None = None  # feature 004: group id shared by the *same physical object* across photos
 
     def names(self) -> list[str]:
         return [self.label, *self.aliases]
@@ -201,15 +204,26 @@ class PhotoScore:
     escalated: bool
     model: str
     error: str | None = None
+    identity_rate: float | None = None  # 004: share of non-person predictions that carry an identity
+    entity_links: dict[str, str] = field(default_factory=dict)  # 004: expected entity group -> memory entity id
 
 
 def score_photo(item: EvalItem, result: ScanResult | None, *, latency_ms: int = 0, cost_usd: float = 0.0,
-                escalated: bool = False, model: str = "", error: str | None = None) -> PhotoScore:
+                escalated: bool = False, model: str = "", error: str | None = None,
+                entity_ids: list[str | None] | None = None) -> PhotoScore:
     n = len(item.expect)
     if result is None:
         return PhotoScore(item.id, item.file, n, 0, [e.label for e in item.expect], [], [], 0.0, None, None,
                           latency_ms, cost_usd, escalated, model, error or "no result")
     pairs, forbid_hits, extras = match(result.objects, item)
+    non_people = [o for o in result.objects if o.category != "person"]
+    identity_rate = (sum(1 for o in non_people if o.identity) / len(non_people)) if non_people else None
+    links: dict[str, str] = {}
+    if entity_ids:
+        for ei, pi in pairs:
+            group = item.expect[ei].entity
+            if group and pi < len(entity_ids) and entity_ids[pi]:
+                links[group] = entity_ids[pi]
     matched_e = {ei for ei, _ in pairs}
     ious = [iou(result.objects[pi].bbox, box_to_bbox(item.expect[ei].box))
             for ei, pi in pairs if item.expect[ei].box and result.objects[pi].bbox]
@@ -224,7 +238,37 @@ def score_photo(item: EvalItem, result: ScanResult | None, *, latency_ms: int = 
         recall=(len(pairs) / n) if n else 1.0,
         iou_mean=(sum(ious) / len(ious)) if ious else None,
         answer_hit=answer_hit, latency_ms=latency_ms, cost_usd=cost_usd, escalated=escalated, model=model,
+        identity_rate=identity_rate, entity_links=links,
     )
+
+
+def identity_metrics(scores: list[PhotoScore]) -> dict:
+    """004 FR-9. identity_recall: for each entity group seen in >= 2 photos, did memory give
+    the same entity id each time (fraction of photo pairs that agree)? identity_precision:
+    are different groups kept apart (fraction of cross-group pairs with different ids)?"""
+    by_group: dict[str, list[str]] = {}
+    for s in scores:
+        for group, eid in s.entity_links.items():
+            by_group.setdefault(group, []).append(eid)
+    same_pairs = agree = 0
+    for ids in by_group.values():
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                same_pairs += 1
+                agree += ids[i] == ids[j]
+    groups = list(by_group)
+    cross_pairs = apart = 0
+    for i in range(len(groups)):
+        for j in range(i + 1, len(groups)):
+            for a in by_group[groups[i]]:
+                for b in by_group[groups[j]]:
+                    cross_pairs += 1
+                    apart += a != b
+    return {
+        "entity_groups": len(groups),
+        "identity_recall": round(agree / same_pairs, 4) if same_pairs else None,
+        "identity_precision": round(apart / cross_pairs, 4) if cross_pairs else None,
+    }
 
 
 def _pct(values: list[float], q: float) -> float:
@@ -240,10 +284,13 @@ def summarize(scores: list[PhotoScore]) -> dict:
     ious = [s.iou_mean for s in ok if s.iou_mean is not None]
     answers = [s.answer_hit for s in ok if s.answer_hit is not None]
     lat = [float(s.latency_ms) for s in ok]
+    id_rates = [s.identity_rate for s in ok if s.identity_rate is not None]
     return {
         "photos": len(scores),
         "errors": len(scores) - len(ok),
         "mean_recall": round(statistics.fmean(s.recall for s in scores), 4) if scores else 0.0,
+        "identity_rate": round(statistics.fmean(id_rates), 4) if id_rates else None,
+        **identity_metrics(scores),
         "forbid_hit_rate": round(sum(1 for s in ok if s.forbid_hits) / len(ok), 4) if ok else 0.0,
         "iou_mean": round(statistics.fmean(ious), 4) if ious else None,
         "iou_photos": len(ious),
@@ -305,6 +352,16 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
     estimate = router.budget.estimate_for(router.primary_model) * len(items)
     if router.budget.remaining() < 1.5 * estimate:
         raise SystemExit(f"not enough budget: need ~{estimate:.3f} USD x1.5, remaining {router.budget.remaining():.3f} USD")
+    # 004: a fresh memory per run (temp file), so identity metrics measure this run only.
+    import tempfile
+
+    mem_file = Path(tempfile.gettempdir()) / f"lens-eval-memory-{os.getpid()}.db"
+    if mem_file.exists():
+        mem_file.unlink()
+    real_model = model is None or (isinstance(model, str) and model != "test")
+    emb = (Embeddings(settings.embedding_model, router.budget) if real_model
+           else Embeddings("hashing", router.budget, embed_fn=hashing_embed))
+    memory = Memory(mem_file, emb if settings.memory else None, threshold=settings.memory_threshold, min_gap_s=0)
 
     scores: list[PhotoScore] = []
     for item in items:
@@ -318,10 +375,17 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
         except (BadImage, AgentFailed, BudgetExceeded) as e:
             scores.append(score_photo(item, None, error=f"{type(e).__name__}: {e}"))
             continue
+        refs = await memory.link(routed.result, routed.request_id, source="tap")
         scores.append(score_photo(item, routed.result, latency_ms=routed.latency_ms, cost_usd=routed.cost_usd,
-                                  escalated=routed.escalated, model=routed.model))
+                                  escalated=routed.escalated, model=routed.model,
+                                  entity_ids=[r.id if r else None for r in refs]))
         print(f"  {item.id:<24} recall {scores[-1].recall:.2f}  missed {scores[-1].missed}  "
-              f"{routed.latency_ms} ms  ${routed.cost_usd:.4f}{'  escalated' if routed.escalated else ''}", file=sys.stderr)
+              f"{routed.latency_ms} ms  ${routed.cost_usd:.4f}{'  escalated' if routed.escalated else ''}"
+              f"{'  links ' + str(scores[-1].entity_links) if scores[-1].entity_links else ''}", file=sys.stderr)
+    try:
+        mem_file.unlink(missing_ok=True)
+    except OSError:
+        pass  # Windows may still hold the file briefly; it is in the temp dir anyway
 
     report = {
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -379,8 +443,8 @@ async def bootstrap(*, photos: Path | None = None, set_path: Path = DEFAULT_SET,
 
 def compare(a: dict, b: dict) -> str:
     """Side-by-side summary metrics with deltas, as text."""
-    keys = ["mean_recall", "forbid_hit_rate", "iou_mean", "answer_accuracy", "escalation_rate",
-            "mean_cost_usd", "latency_p50_ms", "latency_p95_ms"]
+    keys = ["mean_recall", "forbid_hit_rate", "iou_mean", "answer_accuracy", "identity_rate", "identity_recall",
+            "identity_precision", "escalation_rate", "mean_cost_usd", "latency_p50_ms", "latency_p95_ms"]
     sa, sb = a["summary"], b["summary"]
     lines = [f"{'metric':<18}{'A':>12}{'B':>12}{'delta':>12}",
              f"{'photos':<18}{sa['photos']:>12}{sb['photos']:>12}{'':>12}",
@@ -405,6 +469,10 @@ def _print_summary(report: dict) -> None:
           f"answers {s['answer_accuracy'] if s['answer_accuracy'] is not None else '-'}  "
           f"escalated {s['escalation_rate']:.3f}  cost ${s['mean_cost_usd']:.4f}/photo (${s['total_cost_usd']:.4f})  "
           f"latency p50 {s['latency_p50_ms']} ms p95 {s['latency_p95_ms']} ms  errors {s['errors']}")
+    print(f"identity rate {s['identity_rate'] if s['identity_rate'] is not None else '-'}  "
+          f"identity recall {s['identity_recall'] if s['identity_recall'] is not None else '-'}  "
+          f"identity precision {s['identity_precision'] if s['identity_precision'] is not None else '-'}  "
+          f"({s['entity_groups']} entity groups)")
     for f in s["failures"]:
         print(f"  - {f['id']}: missed {f['missed']}{' forbid ' + str(f['forbid_hits']) if f['forbid_hits'] else ''}"
               f"{' error ' + f['error'] if f['error'] else ''}")

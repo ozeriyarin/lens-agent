@@ -5,5 +5,5 @@
 - [x] T3 Store + linking: `app/memory.py` SQLite tables, `link()` with cosine, ambiguity and rate rules, `context_for()`; tests
 - [x] T4 Wiring: router/main call memory after the scan; `/entities` endpoints; `MEMORY=off`; tests
 - [x] T5 Page: known badge on cards and frame labels; Entities panel with Forget
-- [ ] T6 Evals: identity presence metric; cross-photo link pairs in the set; run and record
+- [x] T6 Evals: identity presence metric; cross-photo link pairs in the set; run and record
 - [ ] T7 Manual check on the phone; README; close the spec
