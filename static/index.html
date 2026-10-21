@@ -9,7 +9,7 @@
   /* Single-file PWA, no build step (plan.md). Dark by default: it is a camera app. */
   :root {
     --bg: #111318; --panel: #1b1e26; --line: #2a2e3a; --text: #e8eaf0; --muted: #9aa0b0;
-    --accent: #5ac8fa; --ok: #4cd964; --warn: #ffb340; --bad: #ff5f57;
+    --accent: #5ac8fa; --ok: #4cd964; --warn: #ffb340; --bad: #ff5f57; --live: #ff5f57;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
@@ -17,21 +17,20 @@
   main { max-width: 640px; margin: 0 auto; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
   h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
-  #stats { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  #stats { font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; text-decoration: underline dotted; }
   #stage { position: relative; background: #000; border-radius: 14px; overflow: hidden; aspect-ratio: 3 / 4; }
-  video, canvas#shot { width: 100%; height: 100%; object-fit: cover; display: block; }
-  canvas#shot { position: absolute; inset: 0; display: none; object-fit: contain; }
-  #overlay { position: absolute; inset: 0; pointer-events: none; }
-  .box { position: absolute; border: 2px solid var(--accent); border-radius: 6px; }
-  .box span { position: absolute; left: -2px; top: -22px; background: var(--accent); color: #000;
-    font-size: 12px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
-  form { display: flex; gap: 8px; margin: 12px 0; }
-  input[type=text] { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+  #stage.live { outline: 2px solid var(--live); }
+  video, canvas#shot { width: 100%; height: 100%; object-fit: contain; display: block; }
+  canvas#shot { position: absolute; inset: 0; display: none; }
+  canvas#overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+  form { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  input[type=text] { flex: 1 1 160px; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
     background: var(--panel); color: var(--text); font-size: 16px; }
-  button { padding: 12px 18px; border-radius: 12px; border: 0; background: var(--accent); color: #000;
+  button, select { padding: 12px 18px; border-radius: 12px; border: 0; background: var(--accent); color: #000;
     font-weight: 600; font-size: 16px; cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
-  button.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+  button.secondary, select { background: var(--panel); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  button#liveBtn.on { background: var(--live); color: #fff; }
   #status { min-height: 22px; font-size: 14px; color: var(--muted); margin-bottom: 8px; }
   #status.bad { color: var(--bad); }
   .scene { color: var(--muted); font-size: 14px; margin: 4px 0 10px; }
@@ -45,7 +44,7 @@
   .badge.cached { background: #1f3b2a; color: var(--ok); }
   .badge.paid { background: #3b2f1f; color: var(--warn); }
   .badge.esc { background: #3a1f3b; color: #e6a3ff; }
-  #stats { cursor: pointer; text-decoration: underline dotted; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 0; }
   #panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; font-size: 14px; }
   #panel[hidden] { display: none; }
   #panel h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; }
@@ -57,14 +56,13 @@
   .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 4px 0 10px; }
   .bar i { display: block; height: 100%; background: var(--accent); }
   .bar i.warn { background: var(--warn); }
-  .empty { text-align: center; color: var(--muted); padding: 24px 0; }
 </style>
 </head>
 <body>
 <main>
   <header>
     <h1>lens-agent</h1>
-    <div id="stats" title="month-to-date spend / cap">…</div>
+    <div id="stats" title="month-to-date spend / cap · tap for details">…</div>
   </header>
 
   <section id="panel" hidden></section>
@@ -72,12 +70,17 @@
   <div id="stage">
     <video id="cam" autoplay playsinline muted></video>
     <canvas id="shot"></canvas>
-    <div id="overlay"></div>
+    <canvas id="overlay"></canvas>
   </div>
 
   <form id="scanForm">
     <input id="question" type="text" maxlength="500" placeholder="Optional question, e.g. is this plant healthy?" autocomplete="off">
     <button id="scanBtn" type="submit" disabled>Scan</button>
+    <button id="liveBtn" type="button" class="secondary" disabled title="send a frame every interval while the scene changes">Live</button>
+    <select id="interval" title="live interval">
+      <option value="1000">1 s</option><option value="1500" selected>1.5 s</option>
+      <option value="2000">2 s</option><option value="3000">3 s</option><option value="5000">5 s</option>
+    </select>
     <button id="againBtn" type="button" class="secondary" hidden>Again</button>
   </form>
   <div id="status">Starting camera…</div>
@@ -86,22 +89,24 @@
 </main>
 
 <script>
-/* Flow (spec FR-1, FR-7):
-   1. getUserMedia opens the rear camera. Needs HTTPS or localhost, hence the dev tunnel.
-   2. "Scan" draws the current video frame onto a canvas and encodes a JPEG blob.
-      The server downsizes again to <=1024px, so we only cap at 1280 here to keep the upload small.
-   3. POST /scan (multipart: image, question). The reply is a ScanResponse: result + cost + cached flag.
-   4. One card per DetectedObject; bbox (optional) is drawn over the frozen frame as a normalized rect. */
+/* lens-agent client. Three ways of using the same POST /scan:
+   - tap (001): freeze a frame, send, show cards + overlay on the frozen frame.
+   - live (003): every INTERVAL ms, if the scene changed (thumbnail diff) and no request is
+     in flight, send the live frame with X-Live: 1 and redraw the overlay over the video.
+   - both: a question, if typed, rides along as X-Question.
+   The overlay is a <canvas> sized to the frame's own pixels and CSS-scaled with the video, so
+   the normalized bboxes from the model map 1:1 (003 FR-8). */
 
 const $ = (id) => document.getElementById(id);
-const video = $('cam'), shot = $('shot'), overlay = $('overlay');
-const scanBtn = $('scanBtn'), againBtn = $('againBtn'), statusEl = $('status'), results = $('results');
+const video = $('cam'), shot = $('shot'), overlay = $('overlay'), stage = $('stage');
+const scanBtn = $('scanBtn'), liveBtn = $('liveBtn'), againBtn = $('againBtn'), statusEl = $('status'), results = $('results');
 const MAX_UPLOAD_SIDE = 1280;
+const MOTION_THRESHOLD = 6;       // mean abs diff on 0..255 grayscale thumbnails (003 FR-2). An object moving
+                                  // across ~10% of the frame scores ~8-10; sensor noise on the 32x24 thumbnail ~1-3.
+const THUMB_W = 32, THUMB_H = 24;
+const STALE_MS = 4000;            // overlay dims after this (003 FR-5)
 
-/* Shared secret (SCAN_TOKEN on the server). Open the page once as
-   https://host/#token=... on the phone. The fragment never leaves the browser
-   (not sent to the server, not in tunnel/server logs); it is moved into
-   localStorage and scrubbed from the address bar. */
+/* --- auth: shared secret from #token=, kept in localStorage, sent as Bearer ------------- */
 const TOKEN_KEY = 'lens.token';
 (function adoptTokenFromFragment() {
   const m = /(?:^#|&)token=([^&]+)/.exec(location.hash);
@@ -117,7 +122,14 @@ function authHeaders() {
 }
 
 function setStatus(text, bad = false) { statusEl.textContent = text; statusEl.className = bad ? 'bad' : ''; }
+function fmtUsd(v) { return v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`; }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+/* --- camera ------------------------------------------------------------------------------ */
+let frameSource = video;          // what we capture from; tests may swap in a canvas (window.lens.setSource)
+function sourceSize() {
+  return frameSource === video ? [video.videoWidth, video.videoHeight] : [frameSource.width, frameSource.height];
+}
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
     setStatus('Camera API unavailable. Open this page over HTTPS (or localhost).', true);
@@ -129,75 +141,136 @@ async function startCamera() {
     });
     video.srcObject = stream;
     await video.play();
-    scanBtn.disabled = false;
-    setStatus('Point at a scene and tap Scan.');
+    fitStageTo(video.videoWidth, video.videoHeight);
+    enableControls();
+    setStatus('Point at a scene and tap Scan, or switch Live on.');
   } catch (err) {
     setStatus(`Camera blocked: ${err.message}. Allow camera access and reload.`, true);
   }
 }
+function enableControls() { scanBtn.disabled = false; liveBtn.disabled = false; }
+function fitStageTo(w, h) {
+  // The stage takes the frame's own aspect ratio (no crop), and the overlay canvas gets the
+  // frame's pixel size, so overlay coordinates == frame coordinates after CSS scaling.
+  if (!w || !h) return;
+  stage.style.aspectRatio = `${w} / ${h}`;
+  if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
+}
 
-function captureJpeg() {
-  const vw = video.videoWidth, vh = video.videoHeight;
+function captureJpeg(freeze) {
+  const [vw, vh] = sourceSize();
   if (!vw) throw new Error('camera not ready');
   const scale = Math.min(1, MAX_UPLOAD_SIDE / Math.max(vw, vh));
   shot.width = Math.round(vw * scale); shot.height = Math.round(vh * scale);
-  shot.getContext('2d').drawImage(video, 0, 0, shot.width, shot.height);
-  // The stage adopts the frame's own aspect ratio so nothing is cropped and the normalized
-  // bbox coordinates map 1:1 onto the frozen image.
-  $('stage').style.aspectRatio = `${shot.width} / ${shot.height}`;
-  shot.style.display = 'block';               // freeze the frame the result refers to
+  shot.getContext('2d').drawImage(frameSource, 0, 0, shot.width, shot.height);
+  fitStageTo(shot.width, shot.height);
+  if (freeze) shot.style.display = 'block';   // tap mode: freeze the frame the result refers to
   return new Promise((resolve) => shot.toBlob(resolve, 'image/jpeg', 0.85));
 }
 
-function fmtUsd(v) { return v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`; }
-
-async function refreshStats() {
-  try {
-    const res = await fetch('/stats', { headers: authHeaders() });
-    if (res.status === 401) { setStatus('This server needs a token: open the page as /#token=YOUR_TOKEN once.', true); return; }
-    const s = await res.json();
-    lastStats = s;
-    $('stats').textContent = `${fmtUsd(s.month_to_date_usd)} / $${s.cap_usd.toFixed(0)} · ${s.model.split(':').pop()}`;
-    if (!$('panel').hidden) renderPanel(s);
-  } catch { $('stats').textContent = ''; }
+/* --- motion gate (003 FR-2) --------------------------------------------------------------- */
+const thumbCanvas = document.createElement('canvas');
+thumbCanvas.width = THUMB_W; thumbCanvas.height = THUMB_H;
+function thumbnail() {
+  const g = thumbCanvas.getContext('2d', { willReadFrequently: true });
+  g.drawImage(frameSource, 0, 0, THUMB_W, THUMB_H);
+  const d = g.getImageData(0, 0, THUMB_W, THUMB_H).data;
+  const gray = new Uint8Array(THUMB_W * THUMB_H);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 77 + d[i + 1] * 151 + d[i + 2] * 28) >> 8;
+  return gray;
+}
+function meanAbsDiff(a, b) {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+  return s / a.length;
 }
 
-/* Stats panel (002 FR-6): the same numbers /stats returns, no chart library. */
-let lastStats = null;
-function renderPanel(s) {
-  const pct = Math.min(100, (s.month_to_date_usd / s.cap_usd) * 100);
-  const rows = s.per_model.map((m) => `<tr><td>${escapeHtml(m.model.split(':').pop())}</td>
-      <td class="num">${m.calls}${m.failed ? ` <span class="meta">(${m.failed} failed)</span>` : ''}</td>
-      <td class="num">${fmtUsd(m.cost_usd)}</td><td class="num">${m.avg_latency_ms} ms</td></tr>`).join('');
-  const recent = s.recent.slice(-10).reverse().map((e) => `<tr><td>${e.ts.slice(11, 19)}</td>
-      <td>${escapeHtml(e.model.split(':').pop())}${e.tier === 'escalation' ? ' <span class="badge esc">esc</span>' : ''}${e.status === 'failed' ? ' <span class="badge paid">failed</span>' : ''}</td>
-      <td class="num">${e.input_tokens}/${e.output_tokens}</td><td class="num">${fmtUsd(e.cost_usd)}</td></tr>`).join('');
-  const hitRate = s.cache_hits + s.cache_misses ? Math.round(100 * s.cache_hits / (s.cache_hits + s.cache_misses)) : 0;
-  $('panel').innerHTML = `
-    <h2>This month <button type="button" class="secondary" id="closePanel">close</button></h2>
-    <div>${fmtUsd(s.month_to_date_usd)} of $${s.cap_usd.toFixed(2)} spent · ${fmtUsd(s.remaining_usd)} left</div>
-    <div class="bar"><i class="${pct > 80 ? 'warn' : ''}" style="width:${pct}%"></i></div>
-    <div class="meta">${s.scans_this_month} scans · ${s.escalations} escalated${s.escalation_model ? ` to ${escapeHtml(s.escalation_model.split(':').pop())}` : ' (escalation off)'} · cache hit rate ${hitRate}%</div>
-    <table><tr><th>model</th><th class="num">calls</th><th class="num">cost</th><th class="num">avg latency</th></tr>${rows || '<tr><td colspan="4" class="meta">no calls yet</td></tr>'}</table>
-    <table><tr><th>time (UTC)</th><th>model</th><th class="num">tokens in/out</th><th class="num">cost</th></tr>${recent || '<tr><td colspan="4" class="meta">no scans yet</td></tr>'}</table>`;
-  $('closePanel').onclick = () => { $('panel').hidden = true; };
+/* --- the request --------------------------------------------------------------------------- */
+async function postScan(blob, question, live) {
+  const headers = { ...authHeaders(), 'Content-Type': 'image/jpeg' };
+  if (question) headers['X-Question'] = encodeURIComponent(question);
+  if (live) headers['X-Live'] = '1';
+  const res = await fetch('/scan', { method: 'POST', body: blob, headers });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))).detail;
+    const err = new Error(`${res.status}: ${typeof detail === 'string' ? detail : 'request failed'}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
 }
-$('stats').addEventListener('click', async () => {
-  const panel = $('panel');
-  if (!panel.hidden) { panel.hidden = true; return; }
-  panel.hidden = false;
-  if (lastStats) renderPanel(lastStats);
-  await refreshStats();
-});
 
+/* --- overlay renderer (003 FR-4, FR-5) ---------------------------------------------------- */
+let lastResponse = null, lastDrawnAt = 0;
+function drawOverlay(resp, stale = false) {
+  const W = overlay.width, H = overlay.height;
+  const g = overlay.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  if (!resp) return;
+  const r = resp.result;
+  const base = Math.max(12, Math.round(Math.min(W, H) / 40));   // font scales with the frame
+  g.globalAlpha = stale ? 0.45 : 1;
+  g.lineWidth = Math.max(2, base / 6);
+  g.font = `600 ${base}px system-ui, sans-serif`;
+  g.textBaseline = 'top';
+
+  const label = (lines, x, y, color) => {
+    // Text with a backing rectangle so it reads on any scene.
+    const pad = base * 0.3, lh = base * 1.25;
+    const w = Math.max(...lines.map((t) => g.measureText(t).width)) + pad * 2;
+    const h = lines.length * lh + pad * 2 - (lh - base);
+    const yy = Math.min(Math.max(0, y), H - h), xx = Math.min(Math.max(0, x), W - w);
+    g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(xx, yy, w, h);
+    g.fillStyle = color;
+    lines.forEach((t, i) => g.fillText(t, xx + pad, yy + pad + i * lh));
+    return h;
+  };
+
+  const unboxed = [];
+  for (const o of r.objects) {
+    const pct = `${Math.round(o.confidence * 100)}%`;
+    const lines = [`${o.label} · ${pct}`];
+    if (o.person) {
+      if (o.person.mood) lines.push(`mood: ${o.person.mood.value} (~${Math.round(o.person.mood.confidence * 100)}%)`);
+      if (o.person.age_range) lines.push(`age: ${o.person.age_range.value.replace('_', ' ')} (~${Math.round(o.person.age_range.confidence * 100)}%)`);
+    }
+    if (o.answer) lines.push(`→ ${o.answer}`);
+    if (!o.bbox) { unboxed.push(lines[0]); continue; }
+    const x = o.bbox.x * W, y = o.bbox.y * H, w = o.bbox.w * W, h = o.bbox.h * H;
+    const color = o.category === 'person' ? '#ffb340' : '#5ac8fa';
+    g.strokeStyle = color; g.strokeRect(x, y, w, h);
+    const block = lines.length * base * 1.25 + base * 0.6;
+    label(lines, x, y - block < 0 ? y + g.lineWidth : y - block, color);   // above the box, or inside when at the top edge
+  }
+  if (unboxed.length) label(['no box: ' + unboxed.join(', ')], base * 0.5, base * 0.5, '#e8eaf0');
+
+  // Bottom line: scene sentence (+ answer), wrapped to at most two lines.
+  const bottom = [r.scene, r.answer ? `→ ${r.answer}` : ''].filter(Boolean).join('  ');
+  const words = bottom.split(' '), lines = []; let cur = '';
+  g.font = `500 ${base * 0.9}px system-ui, sans-serif`;
+  for (const wd of words) {
+    const t = cur ? `${cur} ${wd}` : wd;
+    if (g.measureText(t).width > W - base * 2 && cur) { lines.push(cur); cur = wd; } else cur = t;
+    if (lines.length === 2) break;
+  }
+  if (lines.length < 2 && cur) lines.push(cur); else if (lines.length === 2) lines[1] += '…';
+  const lh = base * 0.9 * 1.25, h = lines.length * lh + base * 0.6;
+  g.fillStyle = 'rgba(0,0,0,0.65)'; g.fillRect(0, H - h, W, h);
+  g.fillStyle = '#e8eaf0';
+  lines.forEach((t, i) => g.fillText(t, base * 0.5, H - h + base * 0.3 + i * lh));
+  g.globalAlpha = 1;
+}
+setInterval(() => {  // staleness fade while live
+  if (live.on && lastResponse && Date.now() - lastDrawnAt > STALE_MS) drawOverlay(lastResponse, true);
+}, 1000);
+
+/* --- cards (001) ---------------------------------------------------------------------------- */
 function estimate(e, label) {
   if (!e) return '';
   return `<div class="est">${label}: ${escapeHtml(e.value)} <span class="meta">(estimate, ${Math.round(e.confidence * 100)}% sure)</span></div>`;
 }
-
-function render(resp) {
+function renderCards(resp) {
   const r = resp.result;
-  overlay.innerHTML = '';
   const badge = (resp.cached
     ? '<span class="badge cached">cached · free</span>'
     : `<span class="badge paid">${fmtUsd(resp.cost_usd)} · ${resp.latency_ms} ms</span>`)
@@ -211,52 +284,141 @@ function render(resp) {
       ${o.person ? estimate(o.person.mood, 'Mood') + estimate(o.person.age_range, 'Age') : ''}
       ${o.answer ? `<div class="answer">${escapeHtml(o.answer)}</div>` : ''}
     </div>`;
-    if (o.bbox) {
-      const b = document.createElement('div');
-      b.className = 'box';
-      b.style.left = `${o.bbox.x * 100}%`; b.style.top = `${o.bbox.y * 100}%`;
-      b.style.width = `${o.bbox.w * 100}%`; b.style.height = `${o.bbox.h * 100}%`;
-      b.innerHTML = `<span>${escapeHtml(o.label)}</span>`;
-      overlay.appendChild(b);
-    }
   }
   results.innerHTML = html;
 }
+function showResponse(resp) {
+  lastResponse = resp; lastDrawnAt = Date.now();
+  drawOverlay(resp);
+  renderCards(resp);
+}
 
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+/* --- stats header + panel (002 FR-6) ------------------------------------------------------- */
+let lastStats = null;
+async function refreshStats() {
+  try {
+    const res = await fetch('/stats', { headers: authHeaders() });
+    if (res.status === 401) { setStatus('This server needs a token: open the page as /#token=YOUR_TOKEN once.', true); return; }
+    const s = await res.json();
+    lastStats = s;
+    renderHeader();
+    if (!$('panel').hidden) renderPanel(s);
+  } catch { $('stats').textContent = ''; }
+}
+function renderHeader() {
+  const s = lastStats;
+  if (!s) return;
+  let text = `${fmtUsd(s.month_to_date_usd)} / $${s.cap_usd.toFixed(0)} · ${s.model.split(':').pop()}`;
+  if (live.on || live.spent > 0) text = `live ${fmtUsd(live.spent)} · ${fmtUsd(live.perMinute())}/min · ` + text;
+  $('stats').textContent = text;
+}
+function renderPanel(s) {
+  const pct = Math.min(100, (s.month_to_date_usd / s.cap_usd) * 100);
+  const rows = s.per_model.map((m) => `<tr><td>${escapeHtml(m.model.split(':').pop())}</td>
+      <td class="num">${m.calls}${m.failed ? ` <span class="meta">(${m.failed} failed)</span>` : ''}</td>
+      <td class="num">${fmtUsd(m.cost_usd)}</td><td class="num">${m.avg_latency_ms} ms</td></tr>`).join('');
+  const recent = s.recent.slice(-10).reverse().map((e) => `<tr><td>${e.ts.slice(11, 19)}</td>
+      <td>${escapeHtml(e.model.split(':').pop())}${e.source === 'live' ? ' <span class="meta">live</span>' : ''}${e.tier === 'escalation' ? ' <span class="badge esc">esc</span>' : ''}${e.status === 'failed' ? ' <span class="badge paid">failed</span>' : ''}</td>
+      <td class="num">${e.input_tokens}/${e.output_tokens}</td><td class="num">${fmtUsd(e.cost_usd)}</td></tr>`).join('');
+  const hitRate = s.cache_hits + s.cache_misses ? Math.round(100 * s.cache_hits / (s.cache_hits + s.cache_misses)) : 0;
+  const src = s.scans_by_source || {};
+  $('panel').innerHTML = `
+    <h2>This month <button type="button" class="secondary" id="closePanel">close</button></h2>
+    <div>${fmtUsd(s.month_to_date_usd)} of $${s.cap_usd.toFixed(2)} spent · ${fmtUsd(s.remaining_usd)} left</div>
+    <div class="bar"><i class="${pct > 80 ? 'warn' : ''}" style="width:${pct}%"></i></div>
+    <div class="meta">${s.scans_this_month} scans (${src.tap ?? 0} tap · ${src.live ?? 0} live) · ${s.escalations} escalated${s.escalation_model ? ` to ${escapeHtml(s.escalation_model.split(':').pop())}` : ' (escalation off)'} · cache hit rate ${hitRate}%</div>
+    <table><tr><th>model</th><th class="num">calls</th><th class="num">cost</th><th class="num">avg latency</th></tr>${rows || '<tr><td colspan="4" class="meta">no calls yet</td></tr>'}</table>
+    <table><tr><th>time (UTC)</th><th>model</th><th class="num">tokens in/out</th><th class="num">cost</th></tr>${recent || '<tr><td colspan="4" class="meta">no scans yet</td></tr>'}</table>`;
+  $('closePanel').onclick = () => { $('panel').hidden = true; };
+}
+$('stats').addEventListener('click', async () => {
+  const panel = $('panel');
+  if (!panel.hidden) { panel.hidden = true; return; }
+  panel.hidden = false;
+  if (lastStats) renderPanel(lastStats);
+  await refreshStats();
+});
 
+/* --- tap mode (001) -------------------------------------------------------------------------- */
 $('scanForm').addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  if (live.on) live.stop('Live mode off.');
   scanBtn.disabled = true;
   setStatus('Scanning…');
   try {
-    const blob = await captureJpeg();
-    const q = $('question').value.trim();
-    // Raw body, not multipart: the server never spools the frame to disk (constitution IV).
-    const headers = { ...authHeaders(), 'Content-Type': 'image/jpeg' };
-    if (q) headers['X-Question'] = encodeURIComponent(q);
-    const res = await fetch('/scan', { method: 'POST', body: blob, headers });
-    if (!res.ok) {
-      const detail = (await res.json().catch(() => ({}))).detail;
-      throw new Error(`${res.status}: ${typeof detail === 'string' ? detail : 'request failed'}`);
-    }
-    render(await res.json());
+    const blob = await captureJpeg(true);
+    showResponse(await postScan(blob, $('question').value.trim(), false));
     setStatus('Done. Tap Again for a new frame.');
     againBtn.hidden = false;
   } catch (err) {
     setStatus(err.message, true);
-    shot.style.display = 'none'; overlay.innerHTML = '';  // back to the live preview to re-aim
+    shot.style.display = 'none'; drawOverlay(null);   // back to the live preview to re-aim
     scanBtn.disabled = false;
   }
   refreshStats();
 });
-
 againBtn.addEventListener('click', () => {
-  shot.style.display = 'none'; overlay.innerHTML = ''; results.innerHTML = '';
-  $('stage').style.aspectRatio = '';  // back to the default live-preview shape
+  shot.style.display = 'none'; drawOverlay(null); results.innerHTML = '';
+  const [w, h] = sourceSize(); fitStageTo(w, h);
   againBtn.hidden = true; scanBtn.disabled = false;
-  setStatus('Point at a scene and tap Scan.');
+  setStatus('Point at a scene and tap Scan, or switch Live on.');
 });
+
+/* --- live mode (003 FR-1, FR-3, FR-6) ---------------------------------------------------------- */
+const live = {
+  on: false, timer: null, inFlight: false, lastSent: null, sent: 0, skipped: 0,
+  spent: 0, charges: [],   // [{t, cost}] for the per-minute projection
+  perMinute() { const cut = Date.now() - 60000; return this.charges.filter((c) => c.t > cut).reduce((a, c) => a + c.cost, 0); },
+  start() {
+    if (this.on) return;
+    this.on = true; this.lastSent = null; this.sent = 0; this.skipped = 0;
+    shot.style.display = 'none'; againBtn.hidden = true; results.innerHTML = '';
+    const [w, h] = sourceSize(); fitStageTo(w, h);
+    liveBtn.classList.add('on'); liveBtn.textContent = 'Stop'; stage.classList.add('live');
+    this.timer = setInterval(() => this.tick(), Number($('interval').value));
+    setStatus('Live: sending a frame only when the scene changes.');
+    renderHeader();
+    this.tick();
+  },
+  stop(msg, bad = false) {
+    if (!this.on) return;
+    this.on = false; clearInterval(this.timer); this.timer = null;
+    liveBtn.classList.remove('on'); liveBtn.textContent = 'Live'; stage.classList.remove('live');
+    setStatus(msg || `Live mode off. ${this.sent} frames sent, ${this.skipped} skipped as unchanged.`, bad);
+    renderHeader();
+  },
+  async tick() {
+    if (!this.on || this.inFlight || document.hidden) return;   // FR-3: one in flight; pause when hidden
+    let thumb;
+    try { thumb = thumbnail(); } catch { return; }
+    if (this.lastSent && meanAbsDiff(thumb, this.lastSent) < MOTION_THRESHOLD) { this.skipped++; return; }
+    this.inFlight = true;
+    try {
+      const blob = await captureJpeg(false);
+      const resp = await postScan(blob, $('question').value.trim(), true);
+      this.lastSent = thumb; this.sent++;
+      if (!resp.cached) { this.spent += resp.cost_usd; this.charges.push({ t: Date.now(), cost: resp.cost_usd }); }
+      showResponse(resp);
+      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · last ${resp.cached ? 'cached' : fmtUsd(resp.cost_usd) + ' · ' + resp.latency_ms + ' ms'}${resp.escalated ? ' · escalated' : ''}`);
+      renderHeader();
+      if (this.sent % 5 === 0) refreshStats();
+    } catch (err) {
+      if (err.status === 402 || err.status === 401) { this.stop(`Live stopped: ${err.message}`, true); refreshStats(); }
+      else setStatus(`Live: ${err.message} (still trying)`, true);
+    } finally {
+      this.inFlight = false;
+    }
+  },
+};
+liveBtn.addEventListener('click', () => (live.on ? live.stop() : live.start()));
+$('interval').addEventListener('change', () => { if (live.on) { clearInterval(live.timer); live.timer = setInterval(() => live.tick(), Number($('interval').value)); } });
+document.addEventListener('visibilitychange', () => { if (live.on) setStatus(document.hidden ? 'Live paused (tab hidden).' : 'Live resumed.'); });
+
+/* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
+window.lens = {
+  setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, MOTION_THRESHOLD,
+};
 
 startCamera();
 refreshStats();
