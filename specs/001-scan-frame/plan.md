@@ -15,6 +15,11 @@ static/index.html  --POST /scan (jpeg, question)-->  app/main.py (FastAPI)
 - **SQLite ledger** instead of relying on provider dashboards: the cap must be enforceable offline and testable.
 - **Perceptual hash (imagehash)** for dedupe: cheap, no ML dependency, good enough for "did the scene change".
 - **Single-file PWA**: no build toolchain, works from the phone immediately via a tunnel.
+- **Reserve/settle ledger** (changed during T2/T5): a plain check-then-record had a race, so the
+  cap check and the insert run in one `BEGIN IMMEDIATE` transaction; the row is later settled
+  with real usage, or marked `failed` keeping max(estimate, observed) when the call errored.
+- **Shared token instead of real auth** (added in T6): the only asset to protect is the monthly
+  budget; a single `SCAN_TOKEN` is enough for one owner and one phone. Real users = real auth.
 
 ## Risks
 - Camera API needs HTTPS → use `cloudflared tunnel` or ngrok during dev.
