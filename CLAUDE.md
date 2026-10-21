@@ -30,7 +30,10 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 ## Roadmap (one Spec Kit feature each)
 - **001 scan-frame** — tap to scan, typed objects, dedupe gate, budget guard, cost log. *(done 2026-10-21)*
 - **002 smart-routing** — Gemini first, escalate to Haiku on weak results or unanswered questions; calibrated estimates from the ledger; per-model stats + panel in the page; provider spend limits documented. *(done 2026-10-21)*
-- 003 live mode + overlays — frame every 1–2 s, gate drops unchanged scenes, bbox overlays on `<canvas>` **with the detection data (label, confidence, person estimates) drawn on the frame itself**; optional tiny YOLO for tight boxes
+- **003 live-overlays** — live loop with changed-and-still gate, data drawn on the frame, template tracking between results, flip, zoom. *(done 2026-10-21)*
+- 003b (deferred) in-browser detector for 10-15 fps boxes, if live tracking still feels laggy
+
+Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RAG → 007 Docker/CI/observability → 008 Pi.
 - 004 entity memory — vector store of seen entities, "same mug as yesterday"
 - 005 RAG tool — `lookup(label)` over a small knowledge base
 - 006 evals — 50 labeled photos, scored on every prompt/model change

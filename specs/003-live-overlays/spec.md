@@ -1,6 +1,6 @@
 # Feature 003: Live mode with the data drawn on the frame
 
-**Status**: Draft | **Created**: 2026-10-21
+**Status**: Done (2026-10-21; four phone feedback rounds folded in as FR-9..FR-15; in-browser detector deferred to a later feature) | **Created**: 2026-10-21
 
 ## Why
 001 and 002 are tap-to-scan: one frame, one result, cards below the picture. The thing
