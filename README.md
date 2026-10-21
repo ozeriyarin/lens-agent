@@ -99,7 +99,7 @@ local storage and strips it from the address bar. Allow camera access, point, ta
 ## Endpoints
 
 - `POST /scan` body = the JPEG/PNG bytes (`Content-Type: image/jpeg`, ≤12 MB), optional
-  `X-Question` header (URL-encoded, ≤500 chars)
+  `X-Question` header (URL-encoded, ≤500 chars), optional `X-Live: 1` (sent by the live loop)
   → `ScanResponse` `{result, cached, request_id, model, primary_model, escalated, cost_usd, latency_ms}`.
   Errors: 400 bad image, 401 token, 402 budget reached, 413 too large, 415 not an image body, 502 model failed.
 - `GET /stats` cap, month-to-date, remaining, cache hit/miss counters, recent ledger rows.
@@ -112,6 +112,18 @@ Every scan runs on `MODEL` first. If the result is *weak* (no objects, best conf
 frame is sent once more to the escalation tier and that result is returned, with `escalated: true`
 and both calls in `cost_usd`. Escalation never runs when the primary call failed, when the budget
 cannot cover it, or in demo mode. Tap the cost in the page header for per-model stats.
+
+## Live mode (feature 003)
+
+Tap **Live** and the page captures a frame every 1.5 s (adjustable 1-5 s). Before sending, it
+compares a 32x24 grayscale thumbnail with the last frame it *sent*; if the mean pixel change is
+below `MOTION_THRESHOLD` (6/255) the frame is skipped for free. Frames that do go out carry
+`X-Live: 1` so the ledger can tell live scans from taps, and at most one request is ever in
+flight. Results are drawn on the video: a box per object with label and confidence, mood and
+age estimates on people, objects without a box in a strip, the scene sentence and any answer
+along the bottom. The header shows live spend and a per-minute projection; a 401 or 402 stops
+live mode with the reason. Nothing is recorded or stored: each frame lives in memory for one
+request.
 
 ## Cost model
 
