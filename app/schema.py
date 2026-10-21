@@ -67,18 +67,23 @@ class BBox(BaseModel):
         return self
 
 
-class Estimate(BaseModel):
-    """A guess plus how sure the model is about it (constitution IV)."""
+class MoodEstimate(BaseModel):
+    """A guess plus how sure the model is about it (constitution IV). Closed vocabulary."""
 
-    value: str
+    value: Mood
+    confidence: float = Field(ge=0, le=1)
+
+
+class AgeEstimate(BaseModel):
+    value: AgeRange
     confidence: float = Field(ge=0, le=1)
 
 
 class PersonDetails(BaseModel):
     """Only present when category == 'person'. Always estimates, never facts."""
 
-    mood: Estimate | None = None
-    age_range: Estimate | None = None
+    mood: MoodEstimate | None = None
+    age_range: AgeEstimate | None = None
 
 
 class DetectedObject(BaseModel):

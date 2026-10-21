@@ -84,16 +84,15 @@ const scanBtn = $('scanBtn'), againBtn = $('againBtn'), statusEl = $('status'), 
 const MAX_UPLOAD_SIDE = 1280;
 
 /* Shared secret (SCAN_TOKEN on the server). Open the page once as
-   https://host/?token=... on the phone; it is kept in localStorage and sent as
-   a Bearer header. The query string is scrubbed so the token is not in history. */
+   https://host/#token=... on the phone. The fragment never leaves the browser
+   (not sent to the server, not in tunnel/server logs); it is moved into
+   localStorage and scrubbed from the address bar. */
 const TOKEN_KEY = 'lens.token';
-(function adoptTokenFromUrl() {
-  const url = new URL(location.href);
-  const t = url.searchParams.get('token');
-  if (t) {
-    try { localStorage.setItem(TOKEN_KEY, t); } catch {}
-    url.searchParams.delete('token');
-    history.replaceState(null, '', url.pathname + url.search + url.hash);
+(function adoptTokenFromFragment() {
+  const m = /(?:^#|&)token=([^&]+)/.exec(location.hash);
+  if (m) {
+    try { localStorage.setItem(TOKEN_KEY, decodeURIComponent(m[1])); } catch {}
+    history.replaceState(null, '', location.pathname + location.search);
   }
 })();
 function authHeaders() {
@@ -137,7 +136,7 @@ function fmtUsd(v) { return v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`; 
 async function refreshStats() {
   try {
     const res = await fetch('/stats', { headers: authHeaders() });
-    if (res.status === 401) { setStatus('This server needs a token: open the page as /?token=YOUR_TOKEN once.', true); return; }
+    if (res.status === 401) { setStatus('This server needs a token: open the page as /#token=YOUR_TOKEN once.', true); return; }
     const s = await res.json();
     $('stats').textContent = `${fmtUsd(s.month_to_date_usd)} / $${s.cap_usd.toFixed(0)} · ${s.model}`;
   } catch { $('stats').textContent = ''; }
@@ -145,7 +144,7 @@ async function refreshStats() {
 
 function estimate(e, label) {
   if (!e) return '';
-  return `<div class="est">${label}: ${e.value} <span class="meta">(estimate, ${Math.round(e.confidence * 100)}% sure)</span></div>`;
+  return `<div class="est">${label}: ${escapeHtml(e.value)} <span class="meta">(estimate, ${Math.round(e.confidence * 100)}% sure)</span></div>`;
 }
 
 function render(resp) {
@@ -159,7 +158,7 @@ function render(resp) {
   if (!r.objects.length) html += '<div class="empty">Nothing identifiable in this frame.</div>';
   for (const o of r.objects) {
     html += `<div class="card">
-      <h3>${escapeHtml(o.label)} <small>${o.category} · ${o.position.replace('_', ' ')} · ${Math.round(o.confidence * 100)}%</small></h3>
+      <h3>${escapeHtml(o.label)} <small>${escapeHtml(o.category)} · ${escapeHtml(o.position.replace('_', ' '))} · ${Math.round(o.confidence * 100)}%</small></h3>
       ${o.person ? estimate(o.person.mood, 'Mood') + estimate(o.person.age_range, 'Age') : ''}
       ${o.answer ? `<div class="answer">${escapeHtml(o.answer)}</div>` : ''}
     </div>`;

@@ -32,7 +32,7 @@ The person types a question ("is this plant healthy?") before scanning. The answ
 - FR-8: `question` is at most 500 characters; uploads at most 12 MB and 40 megapixels (checked
   from the header before decoding). Larger inputs are refused before any paid work.
 - FR-9: When `SCAN_TOKEN` is configured, `/scan` and `/stats` require it as a Bearer token.
-  The page adopts `?token=` once into local storage. Unset = open, for localhost use.
+  The page adopts `#token=` (URL fragment, never sent to the server) once into local storage. Unset = open, for localhost use.
 
 ## Non-goals (this feature)
 Live video, bounding-box overlays, entity memory, RAG, evals. Those are features 002–005.

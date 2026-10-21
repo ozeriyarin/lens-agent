@@ -74,8 +74,8 @@ cloudflared tunnel --url http://localhost:8000
 ```
 
 Set `SCAN_TOKEN` in `.env` first, then open the tunnel URL on the phone **once** as
-`https://<tunnel-host>/?token=<your token>`. The page stores the token and strips it
-from the address bar. Allow camera access, point, tap Scan.
+`https://<tunnel-host>/#token=<your token>`. The fragment never reaches the server or its logs; the page moves it into
+local storage and strips it from the address bar. Allow camera access, point, tap Scan.
 
 ## Endpoints
 

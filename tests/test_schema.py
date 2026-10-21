@@ -4,7 +4,7 @@ boundaries: what must be rejected, not only what is accepted."""
 import pytest
 from pydantic import ValidationError
 
-from app.schema import BBox, DetectedObject, Estimate, PersonDetails, ScanResult
+from app.schema import BBox, DetectedObject, MoodEstimate, PersonDetails, ScanResult
 
 
 def test_minimal_object_is_valid():
@@ -39,10 +39,18 @@ def test_bbox_must_stay_inside_frame():
 
 
 def test_person_details_require_person_category():
-    details = PersonDetails(mood=Estimate(value="happy", confidence=0.6))
+    details = PersonDetails(mood=MoodEstimate(value="happy", confidence=0.6))
     DetectedObject(label="man", category="person", confidence=0.9, person=details)
     with pytest.raises(ValidationError):
         DetectedObject(label="dog", category="animal", confidence=0.9, person=details)
+
+
+def test_person_estimates_use_closed_vocabularies():
+    # Free text here would let model output reach the UI unvalidated and break evals.
+    with pytest.raises(ValidationError):
+        MoodEstimate(value="<img onerror=alert(1)>", confidence=0.5)
+    with pytest.raises(ValidationError):
+        PersonDetails.model_validate({"age_range": {"value": "about 30", "confidence": 0.5}})
 
 
 def test_scan_result_empty_means_nothing_identifiable():
