@@ -257,3 +257,20 @@ def test_ledger_from_feature_001_gets_the_tier_column(tmp_path):
     [entry] = budget.entries(NOW)
     assert entry.tier == "primary" and entry.request_id == "old"
     assert budget.escalations(NOW) == 0
+
+
+def test_source_column_defaults_to_tap_and_is_migrated_for_old_ledgers(tmp_path):
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE spend (request_id TEXT PRIMARY KEY, ts TEXT NOT NULL, model TEXT NOT NULL, "
+        "input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, cost_usd REAL NOT NULL, "
+        "latency_ms INTEGER NOT NULL, status TEXT NOT NULL, tier TEXT NOT NULL DEFAULT 'primary')"
+    )
+    conn.execute("INSERT INTO spend VALUES ('old', ?, ?, 1, 1, 0.01, 5, 'settled', 'primary')", (NOW.isoformat(), GEMINI))
+    conn.commit(); conn.close()
+    budget = Budget(path, cap_usd=5.0)
+    assert budget.entries(NOW)[0].source == "tap"
+    budget.reserve(GEMINI, 0.001, now=NOW, source="live")
+    esc = budget.reserve(HAIKU, 0.001, now=NOW, tier="escalation", source="live")
+    assert budget.scans_by_source(NOW) == {"tap": 1, "live": 1}  # escalation rows are not scans

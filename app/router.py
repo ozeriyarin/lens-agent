@@ -80,10 +80,10 @@ class Router:
         return self.escalation is not None
 
     async def _paid_call(self, agent: Agent[None, ScanResult], model: str, frame: PreparedFrame,
-                         question: str | None, tier: str):
+                         question: str | None, tier: str, source: str):
         """reserve -> scan -> settle, returning (outcome, ledger entry). Raises on any failure
         after marking the reservation failed; raises BudgetExceeded before any call."""
-        request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier)
+        request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier, source=source)
         started = time.perf_counter()
         try:
             outcome = await scan(agent, frame, question)
@@ -102,8 +102,8 @@ class Router:
         )
         return outcome, entry
 
-    async def run(self, frame: PreparedFrame, question: str | None = None) -> Routed:
-        outcome, entry = await self._paid_call(self.primary, self.primary_model, frame, question, "primary")
+    async def run(self, frame: PreparedFrame, question: str | None = None, source: str = "tap") -> Routed:
+        outcome, entry = await self._paid_call(self.primary, self.primary_model, frame, question, "primary", source)
         routed = Routed(
             result=outcome.result,
             model=self.primary_model,
@@ -118,7 +118,7 @@ class Router:
 
         try:
             outcome2, entry2 = await self._paid_call(
-                self.escalation, self.escalation_model, frame, question, "escalation"  # type: ignore[arg-type]
+                self.escalation, self.escalation_model, frame, question, "escalation", source  # type: ignore[arg-type]
             )
         except BudgetExceeded as e:
             log.info("escalation skipped, budget: %s", e)

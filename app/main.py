@@ -68,6 +68,7 @@ class StatsResponse(BaseModel):
     month_to_date_usd: float
     remaining_usd: float
     scans_this_month: int
+    scans_by_source: dict[str, int]
     escalations: int
     cache_hits: int
     cache_misses: int
@@ -163,7 +164,9 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         svc: Svc,
         request: Request,
         x_question: Annotated[str | None, Header(description="Optional question, URL-encoded UTF-8")] = None,
+        x_live: Annotated[str | None, Header(description="'1' when sent by the live loop (feature 003)")] = None,
     ) -> ScanResponse:
+        source = "live" if x_live == "1" else "tap"
         # The frame is the raw request body, not a multipart form: Starlette spools
         # multipart parts over 1 MB to a temp file on disk, and constitution IV says raw
         # frames never touch disk. Reading the stream ourselves also lets us stop at the
@@ -191,7 +194,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
 
         # The router does reserve -> scan -> settle/fail for each tier (001 FR-5/FR-6, 002 FR-1/FR-2).
         try:
-            routed = await svc.router.run(frame, question)
+            routed = await svc.router.run(frame, question, source=source)
         except BudgetExceeded as e:
             raise HTTPException(402, str(e)) from e
         except AgentFailed as e:
@@ -221,6 +224,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             month_to_date_usd=svc.budget.month_to_date(),
             remaining_usd=svc.budget.remaining(),
             scans_this_month=sum(1 for e in entries if e.tier == "primary"),
+            scans_by_source=svc.budget.scans_by_source(),
             escalations=svc.budget.escalations(),
             cache_hits=svc.cache.hits,
             cache_misses=svc.cache.misses,

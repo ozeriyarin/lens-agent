@@ -58,6 +58,10 @@ Status = Literal["reserved", "settled", "failed"]
 # makes when the primary result was weak. Lets /stats count escalations.
 Tier = Literal["primary", "escalation"]
 
+# tap: the person pressed Scan. live: feature 003's loop sent the frame.
+# Live frames are the volume driver, so stats and evals want to tell them apart.
+Source = Literal["tap", "live"]
+
 # Calibration (002 FR-4): once a model has a few settled calls, estimate from
 # what it actually cost us rather than the fixed token table.
 CALIBRATION_WINDOW = 20
@@ -82,6 +86,7 @@ class SpendEntry:
     latency_ms: int
     status: Status
     tier: Tier = "primary"
+    source: Source = "tap"
 
 
 @dataclass(frozen=True)
@@ -114,11 +119,11 @@ def _month_start(now: datetime) -> str:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
-_COLUMNS = "request_id, ts, model, input_tokens, output_tokens, cost_usd, latency_ms, status, tier"
+_COLUMNS = "request_id, ts, model, input_tokens, output_tokens, cost_usd, latency_ms, status, tier, source"
 
 
 def _row_to_entry(r: tuple) -> SpendEntry:
-    return SpendEntry(r[0], datetime.fromisoformat(r[1]), r[2], r[3], r[4], r[5], r[6], r[7], r[8])
+    return SpendEntry(r[0], datetime.fromisoformat(r[1]), r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9])
 
 
 class Budget:
@@ -141,15 +146,18 @@ class Budget:
                     cost_usd      REAL NOT NULL,
                     latency_ms    INTEGER NOT NULL,
                     status        TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'failed')),
-                    tier          TEXT NOT NULL DEFAULT 'primary' CHECK (tier IN ('primary', 'escalation'))
+                    tier          TEXT NOT NULL DEFAULT 'primary' CHECK (tier IN ('primary', 'escalation')),
+                    source        TEXT NOT NULL DEFAULT 'tap' CHECK (source IN ('tap', 'live'))
                 )
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS spend_ts ON spend(ts)")
-            # Ledgers created by feature 001 predate the tier column: add it in place.
+            # Older ledgers predate these columns: add them in place (001 -> tier, 002 -> source).
             cols = {row[1] for row in conn.execute("PRAGMA table_info(spend)")}
             if "tier" not in cols:
                 conn.execute("ALTER TABLE spend ADD COLUMN tier TEXT NOT NULL DEFAULT 'primary'")
+            if "source" not in cols:
+                conn.execute("ALTER TABLE spend ADD COLUMN source TEXT NOT NULL DEFAULT 'tap'")
 
     def _connect(self) -> sqlite3.Connection:
         # isolation_level=None: we issue BEGIN/COMMIT ourselves where it matters.
@@ -202,6 +210,17 @@ class Budget:
             ).fetchall()
         return [ModelStats(r[0], r[1], r[2], float(r[3]), int(round(r[4]))) for r in rows]
 
+    def scans_by_source(self, now: datetime | None = None) -> dict[str, int]:
+        """003 FR-7: primary calls this month split into tap vs live."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT source, COUNT(*) FROM spend WHERE ts >= ? AND tier = 'primary' GROUP BY source",
+                (_month_start(now or _utcnow()),),
+            ).fetchall()
+        counts = {"tap": 0, "live": 0}
+        counts.update({r[0]: int(r[1]) for r in rows})
+        return counts
+
     def escalations(self, now: datetime | None = None) -> int:
         """How many escalation-tier calls this month (002 FR-5)."""
         with self._connect() as conn:
@@ -241,6 +260,7 @@ class Budget:
         request_id: str | None = None,
         now: datetime | None = None,
         tier: Tier = "primary",
+        source: Source = "tap",
     ) -> str:
         """FR-5, atomically: refuse if month-to-date + estimate > cap, else hold the estimate.
 
@@ -258,8 +278,8 @@ class Budget:
                         f"cap {self.cap_usd:.2f} USD"
                     )
                 conn.execute(
-                    f"INSERT INTO spend ({_COLUMNS}) VALUES (?, ?, ?, 0, 0, ?, 0, 'reserved', ?)",
-                    (request_id, ts.isoformat(), model, estimated_cost_usd, tier),
+                    f"INSERT INTO spend ({_COLUMNS}) VALUES (?, ?, ?, 0, 0, ?, 0, 'reserved', ?, ?)",
+                    (request_id, ts.isoformat(), model, estimated_cost_usd, tier, source),
                 )
                 conn.execute("COMMIT")
             except BaseException:

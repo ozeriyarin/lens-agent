@@ -179,3 +179,18 @@ def test_scan_response_reports_routing_fields(tmp_path):
     with client:
         body = post_scan(client, make_scene(8)).json()
         assert body["primary_model"] == "test" and body["escalated"] is False
+
+
+# --- feature 003 -------------------------------------------------------------------
+
+
+def test_live_header_tags_the_ledger_row_and_stats_split_by_source(tmp_path):
+    client, settings = make_client(tmp_path)
+    with client:
+        assert post_scan(client, make_scene(10)).status_code == 200
+        assert post_scan(client, make_scene(11), headers={"X-Live": "1"}).status_code == 200
+        assert post_scan(client, make_scene(12), headers={"X-Live": "0"}).status_code == 200
+        entries = Budget(settings.db_path, 5).entries()
+        assert [e.source for e in entries] == ["tap", "live", "tap"]
+        s = client.get("/stats").json()
+        assert s["scans_by_source"] == {"tap": 2, "live": 1} and s["scans_this_month"] == 3
