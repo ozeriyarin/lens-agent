@@ -35,7 +35,9 @@ return a structured list of the objects you can actually see.
 
 Rules:
 - One entry per distinct physical object. Use a short everyday label ("coffee mug",
-  "laptop", "golden retriever"). Pick the closest category from the schema.
+  "laptop", "golden retriever"). Pick the closest category from the schema. Small objects
+  a person might be holding or pointing at (remote control, phone, keys) matter as much as
+  large ones: list them when they are visible.
 - `position` describes how the object sits in the scene (on_table, on_floor, held,
   standing, ...). Use "unknown" rather than guessing.
 - `confidence` is how sure you are the object is present, 0..1. Be honest: a blurry
@@ -115,8 +117,9 @@ def build_agent(model: str | Model) -> Agent[None, ScanResult]:
 
 
 LIVE_HINT = (
-    " Live mode: be brief. List at most 6 of the most prominent objects, keep `scene` under"
-    " 12 words, and leave `answer` fields empty unless a question was asked."
+    " Live mode: be brief. List at most 10 objects, keep `scene` under 12 words, and leave"
+    " `answer` fields empty unless a question was asked. Small handheld things count as objects"
+    " (remote control, phone, keys, cup, pen): include them when visible, even if small."
 )
 
 

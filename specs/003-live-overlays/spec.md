@@ -72,6 +72,11 @@ per minute at the current send rate. Toggling Live off clears the overlay.
   moving since the previous tick. Panning or shake never triggers a scan.
 - FR-12 **Front camera.** A Flip control switches rear/front, mid-live or between scans; the
   selfie preview is mirrored with the overlay text drawn readable.
+- FR-14 **Zoom.** Pinch on the preview or a slider zooms 1-4x (up to 8x when the camera track
+  exposes hardware zoom). Digital zoom crops the centre of the frame for upload, motion gate and
+  tracker alike, so boxes stay aligned with the zoomed preview. Works mid-live.
+- FR-15 **Small objects.** Live frames allow up to 10 objects and the instructions say that small
+  handheld things (remote, phone, keys) count; the first phone test missed a remote.
 - FR-13 **Fast scans.** Model "thinking" is off for scans and live frames ask for brief output
   (<= 6 objects, short scene): measured on the phone 2.1-2.8 s per frame instead of 4-13 s.
 

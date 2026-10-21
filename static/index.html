@@ -31,6 +31,9 @@
   button:disabled { opacity: .5; cursor: default; }
   button.secondary, select { background: var(--panel); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
   button#liveBtn.on { background: var(--live); color: #fff; }
+  #zoomRow { display: flex; align-items: center; gap: 10px; margin: -4px 0 10px; font-size: 13px; color: var(--muted); }
+  #zoomRow input[type=range] { flex: 1; accent-color: var(--accent); }
+  #stage { touch-action: none; }   /* pinch is ours, not the page's */
   #status { min-height: 22px; font-size: 14px; color: var(--muted); margin-bottom: 8px; }
   #status.bad { color: var(--bad); }
   .scene { color: var(--muted); font-size: 14px; margin: 4px 0 10px; }
@@ -72,6 +75,8 @@
     <canvas id="shot"></canvas>
     <canvas id="overlay"></canvas>
   </div>
+
+  <div id="zoomRow"><span>zoom</span><input id="zoom" type="range" min="1" max="4" step="0.1" value="1"><span id="zoomVal">1.0×</span></div>
 
   <form id="scanForm">
     <input id="question" type="text" maxlength="500" placeholder="Optional question, e.g. is this plant healthy?" autocomplete="off">
@@ -149,6 +154,47 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&a
 /* --- camera ------------------------------------------------------------------------------ */
 let frameSource = video;          // what we capture from; tests may swap in a canvas (window.lens.setSource)
 let facing = 'environment';       // 'environment' = rear, 'user' = front
+
+/* Zoom. Hardware zoom (the camera track supports a `zoom` constraint: Android Chrome, recent
+   iOS) changes the frames themselves. Otherwise digital: the preview is CSS-scaled and every
+   capture (upload, thumbnail, tracker) reads the same central crop, so boxes stay aligned. */
+const zoomState = { value: 1, hardware: null, max: 4 };
+function cropRect() {
+  const [vw, vh] = sourceSize();
+  if (zoomState.hardware || zoomState.value <= 1) return [0, 0, vw, vh];
+  const z = zoomState.value, cw = vw / z, ch = vh / z;
+  return [(vw - cw) / 2, (vh - ch) / 2, cw, ch];
+}
+function drawSource(ctx, dw, dh) {   // draw the (possibly cropped) current frame into dw x dh
+  const [sx, sy, sw, sh] = cropRect();
+  ctx.drawImage(frameSource, sx, sy, sw, sh, 0, 0, dw, dh);
+}
+function applyPreviewTransform() {
+  const mirror = facing === 'user' ? ' scaleX(-1)' : '';
+  const scale = zoomState.hardware || zoomState.value <= 1 ? '' : ` scale(${zoomState.value})`;
+  video.style.transform = (scale + mirror).trim();
+  overlay.style.transform = mirror.trim();   // the overlay already represents the cropped view
+}
+async function setZoom(z) {
+  z = Math.min(zoomState.max, Math.max(1, Math.round(z * 10) / 10));
+  if (z === zoomState.value) return;
+  zoomState.value = z;
+  $('zoom').value = z; $('zoomVal').textContent = `${z.toFixed(1)}×`;
+  if (zoomState.hardware && video.srcObject) {
+    try { await video.srcObject.getVideoTracks()[0].applyConstraints({ advanced: [{ zoom: z }] }); } catch {}
+  }
+  applyPreviewTransform();
+  live.lastSent = null; live.prevThumb = null;   // framing changed: next still view is a new view
+  if (!live.on) { drawOverlay(null); }
+}
+$('zoom').addEventListener('input', (e) => setZoom(Number(e.target.value)));
+(function pinch() {   // two-finger pinch on the stage adjusts zoom, live or not
+  let startDist = 0, startZoom = 1;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  stage.addEventListener('touchstart', (e) => { if (e.touches.length === 2) { startDist = dist(e.touches); startZoom = zoomState.value; } }, { passive: true });
+  stage.addEventListener('touchmove', (e) => { if (e.touches.length === 2 && startDist) { e.preventDefault(); setZoom(startZoom * dist(e.touches) / startDist); } }, { passive: false });
+  stage.addEventListener('touchend', () => { startDist = 0; });
+})();
 function sourceSize() {
   return frameSource === video ? [video.videoWidth, video.videoHeight] : [frameSource.width, frameSource.height];
 }
@@ -165,8 +211,14 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
     fitStageTo(video.videoWidth, video.videoHeight);
-    video.style.transform = facing === 'user' ? 'scaleX(-1)' : '';   // mirror the selfie preview only
-    overlay.style.transform = video.style.transform;                   // keep boxes on the mirrored pixels
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    zoomState.hardware = caps.zoom && caps.zoom.max > 1 ? caps.zoom : null;
+    zoomState.max = zoomState.hardware ? Math.min(8, caps.zoom.max) : 4;
+    $('zoom').max = zoomState.max;
+    zoomState.value = 1; $('zoom').value = 1; $('zoomVal').textContent = '1.0×';
+    $('zoomRow').title = zoomState.hardware ? 'optical/hardware zoom' : 'digital zoom (crop)';
+    applyPreviewTransform();
     enableControls();
     if (!live.on) setStatus('Point at a scene and tap Scan, or switch Live on.');
   } catch (err) {
@@ -192,13 +244,13 @@ function fitStageTo(w, h) {
 }
 
 function captureJpeg(freeze) {
-  const [vw, vh] = sourceSize();
-  if (!vw) throw new Error('camera not ready');
-  const scale = Math.min(1, MAX_UPLOAD_SIDE / Math.max(vw, vh));
-  shot.width = Math.round(vw * scale); shot.height = Math.round(vh * scale);
-  shot.getContext('2d').drawImage(frameSource, 0, 0, shot.width, shot.height);
+  const [, , cw, ch] = cropRect();
+  if (!cw) throw new Error('camera not ready');
+  const scale = Math.min(1, MAX_UPLOAD_SIDE / Math.max(cw, ch));
+  shot.width = Math.round(cw * scale); shot.height = Math.round(ch * scale);
+  drawSource(shot.getContext('2d'), shot.width, shot.height);
   fitStageTo(shot.width, shot.height);
-  if (freeze) shot.style.display = 'block';   // tap mode: freeze the frame the result refers to
+  if (freeze) { shot.style.transform = facing === 'user' ? 'scaleX(-1)' : ''; shot.style.display = 'block'; }   // tap mode: freeze the frame the result refers to
   return new Promise((resolve) => shot.toBlob(resolve, 'image/jpeg', 0.85));
 }
 
@@ -207,7 +259,7 @@ const thumbCanvas = document.createElement('canvas');
 thumbCanvas.width = THUMB_W; thumbCanvas.height = THUMB_H;
 function thumbnail() {
   const g = thumbCanvas.getContext('2d', { willReadFrequently: true });
-  g.drawImage(frameSource, 0, 0, THUMB_W, THUMB_H);
+  drawSource(g, THUMB_W, THUMB_H);
   const d = g.getImageData(0, 0, THUMB_W, THUMB_H).data;
   const gray = new Uint8Array(THUMB_W * THUMB_H);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 77 + d[i + 1] * 151 + d[i + 2] * 28) >> 8;
@@ -341,7 +393,7 @@ const tracker = {
   gray(srcEl, sw, sh) {
     const w = this.work; if (w.width !== sw || w.height !== sh) { w.width = sw; w.height = sh; }
     const g = w.getContext('2d', { willReadFrequently: true });
-    g.drawImage(srcEl, 0, 0, sw, sh);
+    if (srcEl === frameSource) drawSource(g, sw, sh); else g.drawImage(srcEl, 0, 0, sw, sh);
     const d = g.getImageData(0, 0, sw, sh).data, out = new Uint8Array(sw * sh);
     for (let i = 0, j = 0; i < d.length; i += 4, j++) out[j] = (d[i] * 77 + d[i + 1] * 151 + d[i + 2] * 28) >> 8;
     return out;
@@ -536,7 +588,7 @@ document.addEventListener('visibilitychange', () => { if (live.on) setStatus(doc
 /* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
 window.lens = {
   setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
-  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse,
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse, setZoom, zoomState, cropRect,
 };
 
 startCamera();
