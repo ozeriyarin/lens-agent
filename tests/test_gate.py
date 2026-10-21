@@ -71,6 +71,21 @@ def test_prepare_rejects_garbage():
         prepare(b"definitely not an image")
 
 
+def test_prepare_rejects_decompression_bomb_from_the_header():
+    # A PNG header can claim any size; we must refuse before decoding pixels.
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    w = h = 30_000  # 900 MP
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
+    bomb = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(b"\x00")) + chunk(b"IEND", b"")
+    with pytest.raises(BadImage, match="too large|decodable"):
+        prepare(bomb)
+
+
 # --- hashing -------------------------------------------------------------------
 
 

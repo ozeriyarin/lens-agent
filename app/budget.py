@@ -224,16 +224,32 @@ class Budget:
             ).fetchone()
         return _row_to_entry(stored)
 
-    def fail(self, request_id: str, latency_ms: int = 0) -> None:
-        """The call errored *after* reaching the provider: keep the estimate charged.
+    def fail(
+        self,
+        request_id: str,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        latency_ms: int = 0,
+    ) -> None:
+        """The call errored *after* reaching the provider: charge the larger of the
+        reserved estimate and the usage we did observe.
 
         Overcounting a failed call is the safe direction (constitution II);
         the next month resets it anyway.
         """
         with self._connect() as conn:
+            row = conn.execute(
+                "SELECT model, cost_usd FROM spend WHERE request_id = ? AND status = 'reserved'", (request_id,)
+            ).fetchone()
+            if row is None:
+                return  # already settled/failed, or never reserved: nothing to do
+            model, reserved = row
+            cost = max(float(reserved), estimate_cost(model, input_tokens, output_tokens))
             conn.execute(
-                "UPDATE spend SET status = 'failed', latency_ms = ? WHERE request_id = ? AND status = 'reserved'",
-                (latency_ms, request_id),
+                "UPDATE spend SET status = 'failed', input_tokens = ?, output_tokens = ?, cost_usd = ?, "
+                "latency_ms = ? WHERE request_id = ?",
+                (input_tokens, output_tokens, cost, latency_ms, request_id),
             )
 
     def release(self, request_id: str) -> None:

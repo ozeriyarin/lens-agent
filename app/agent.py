@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pydantic_ai import Agent, BinaryContent
 from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded
 from pydantic_ai.models import Model
-from pydantic_ai.usage import UsageLimits
+from pydantic_ai.usage import RunUsage, UsageLimits
 
 from app.gate import PreparedFrame
 from app.schema import ScanResult
@@ -67,7 +67,14 @@ class AgentFailed(RuntimeError):
 
     Tokens were still consumed on the provider side, so the caller must keep
     the budget reservation charged (see `Budget.fail`), not release it.
+    `input_tokens` / `output_tokens` carry whatever usage the run accumulated
+    before it gave up, so the ledger can bill the real figure.
     """
+
+    def __init__(self, message: str, *, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        super().__init__(message)
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
 
 
 @dataclass(frozen=True)
@@ -102,10 +109,11 @@ def _prompt(frame: PreparedFrame, question: str | None) -> list[str | BinaryCont
 async def scan(agent: Agent[None, ScanResult], frame: PreparedFrame, question: str | None = None) -> ScanOutcome:
     """Run the agent on one prepared frame. Raises AgentFailed on malformed output."""
     started = time.perf_counter()
+    usage = RunUsage()  # passed in so we still have the numbers if the run raises
     try:
-        run = await agent.run(_prompt(frame, question), usage_limits=SCAN_USAGE_LIMITS)
+        run = await agent.run(_prompt(frame, question), usage_limits=SCAN_USAGE_LIMITS, usage=usage)
     except (UnexpectedModelBehavior, UsageLimitExceeded) as e:
-        raise AgentFailed(str(e)) from e
+        raise AgentFailed(str(e), input_tokens=usage.input_tokens or 0, output_tokens=usage.output_tokens or 0) from e
     usage = run.usage
     return ScanOutcome(
         result=run.output,

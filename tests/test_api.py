@@ -80,7 +80,8 @@ def test_model_failure_keeps_the_estimate_charged(tmp_path):
         assert r.status_code == 502
         [entry] = Budget(settings.db_path, 5).entries()
         assert entry.status == "failed"
-        assert entry.cost_usd == pytest.approx(estimate_scan_cost("test:fake"))  # provider billed the attempt
+        # provider billed the attempt: charged at least the estimate, more if we saw more usage
+        assert entry.cost_usd >= estimate_scan_cost("test:fake")
 
 
 def test_overlong_question_is_rejected_before_any_work(tmp_path):
@@ -106,6 +107,21 @@ def test_stats_reports_cap_and_spend(tmp_path):
         assert s["month_to_date_usd"] == pytest.approx(s["recent"][0]["cost_usd"])
         assert s["remaining_usd"] == pytest.approx(5.0 - s["month_to_date_usd"])
         assert s["recent"][0]["status"] == "settled"
+
+
+def test_token_guards_paid_endpoints_when_set(tmp_path):
+    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", scan_token="s3cret")
+    client = TestClient(create_app(settings, model=TestModel(custom_output_args=DESK)))
+    with client:
+        assert client.get("/").status_code == 200  # the page itself is public; it holds no data
+        assert client.get("/stats").status_code == 401
+        assert post_scan(client, make_scene(7)).status_code == 401
+        assert client.get("/stats", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert client.get("/stats", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+        ok = client.post("/scan", files={"image": ("f.jpg", make_scene(7), "image/jpeg")},
+                         headers={"Authorization": "Bearer s3cret"})
+        assert ok.status_code == 200
+        assert len(Budget(settings.db_path, 5).entries()) == 1  # the 401s cost nothing
 
 
 def test_index_serves_the_pwa(tmp_path):

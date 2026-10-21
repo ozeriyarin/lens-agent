@@ -86,6 +86,15 @@ def test_reservation_counts_until_settled_or_released(budget):
     assert budget.month_to_date(NOW) == pytest.approx(entry.cost_usd + 1.0)
 
 
+def test_fail_charges_observed_usage_when_it_exceeds_the_estimate(budget):
+    rid = budget.reserve(GEMINI, 0.0001, now=NOW)  # a deliberately tiny estimate
+    budget.fail(rid, input_tokens=100_000, output_tokens=10_000, latency_ms=5)
+    [entry] = budget.entries(NOW)
+    assert entry.status == "failed"
+    assert entry.cost_usd == pytest.approx(estimate_cost(GEMINI, 100_000, 10_000))
+    assert entry.cost_usd > 0.0001
+
+
 def test_settle_twice_or_settle_unknown_is_an_error(budget):
     rid = budget.reserve(GEMINI, 0.01, now=NOW)
     budget.settle(rid, input_tokens=1, output_tokens=1, latency_ms=1)

@@ -22,7 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+import secrets
+
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -61,9 +63,31 @@ class StatsResponse(BaseModel):
     recent: list[SpendEntry]
 
 
+def _demo_model() -> Model:
+    """`MODEL=test`: Pydantic AI's offline TestModel with a canned desk scene, so the
+    whole app can be clicked through without an API key or a cent of spend."""
+    from pydantic_ai.models.test import TestModel
+
+    return TestModel(
+        custom_output_args={
+            "scene": "demo mode: a desk with a laptop and a mug (no real model was called)",
+            "objects": [
+                {"label": "laptop", "category": "electronics", "position": "on_table", "confidence": 0.95,
+                 "bbox": {"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.4}},
+                {"label": "coffee mug", "category": "other", "position": "on_table", "confidence": 0.8},
+                {"label": "person", "category": "person", "position": "sitting", "confidence": 0.7,
+                 "person": {"mood": {"value": "neutral", "confidence": 0.5},
+                            "age_range": {"value": "adult", "confidence": 0.6}}},
+            ],
+        }
+    )
+
+
 def create_app(settings: Settings | None = None, model: str | Model | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     chosen_model = model if model is not None else settings.model
+    if chosen_model == "test":
+        chosen_model = _demo_model()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -78,8 +102,19 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
 
     app = FastAPI(title="lens-agent", version="0.1.0", lifespan=lifespan)
 
-    def services(request: Request) -> Services:
-        return request.app.state.services
+    def services(request: Request, authorization: Annotated[str | None, Header()] = None) -> Services:
+        """Resolve the shared services and, when SCAN_TOKEN is set, require it.
+
+        The token guards the *budget*, not the data: with the server on a public
+        tunnel, anyone who finds the URL could otherwise spend the month's cap.
+        """
+        svc: Services = request.app.state.services
+        expected = svc.settings.scan_token
+        if expected:
+            presented = (authorization or "").removeprefix("Bearer ").strip()
+            if not secrets.compare_digest(presented, expected):  # constant-time compare
+                raise HTTPException(401, "missing or wrong token", headers={"WWW-Authenticate": "Bearer"})
+        return svc
 
     Svc = Annotated[Services, Depends(services)]
 
@@ -109,8 +144,8 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         try:
             outcome = await scan(svc.agent, frame, question)
         except AgentFailed as e:
-            # The provider still billed those tokens: keep the estimate on the ledger.
-            svc.budget.fail(request_id)
+            # The provider still billed those tokens: charge max(estimate, observed usage).
+            svc.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens)
             raise HTTPException(502, f"model could not produce a valid result: {e}") from e
         except Exception:
             svc.budget.fail(request_id)  # unknown failure: assume money was spent

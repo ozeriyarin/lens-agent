@@ -40,6 +40,12 @@ JPEG_QUALITY = 85
 DEFAULT_MAX_DISTANCE = 8
 DEFAULT_CAPACITY = 32
 
+# A tiny JPEG/PNG header can declare a 100k x 100k canvas; decoding it would
+# eat gigabytes of RAM before we ever downscale. 40 MP covers every phone
+# camera. Checked from the header *before* pixels are decoded.
+MAX_PIXELS = 40_000_000
+Image.MAX_IMAGE_PIXELS = MAX_PIXELS  # Pillow raises DecompressionBombError above 2x this
+
 T = TypeVar("T")
 
 
@@ -64,9 +70,12 @@ class PreparedFrame:
 def prepare(raw: bytes) -> PreparedFrame:
     """Decode, downscale to MAX_SIDE, re-encode as JPEG, hash. All in memory."""
     try:
-        img = Image.open(BytesIO(raw))
+        img = Image.open(BytesIO(raw))  # lazy: reads the header only
+        if img.width * img.height > MAX_PIXELS:
+            raise BadImage(f"image too large: {img.width}x{img.height} px, max {MAX_PIXELS} px")
+        img.draft("RGB", (MAX_SIDE, MAX_SIDE))  # JPEG: decode at reduced scale straight away
         img.load()
-    except (UnidentifiedImageError, OSError) as e:
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as e:
         raise BadImage(f"not a decodable image: {e}") from e
 
     img = img.convert("RGB")  # drops alpha / palette so JPEG encoding always works
