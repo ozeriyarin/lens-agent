@@ -9,7 +9,7 @@ one retry. Our code only ever sees a valid `ScanResult` or an exception.
 What this module deliberately does *not* do: read env vars, touch the
 budget, or cache. `main.py` composes gate -> budget -> agent so each piece
 stays testable on its own. Model choice comes in as a string
-(`google-gla:gemini-2.5-flash`, `anthropic:claude-haiku-4-5`) or a Model
+(`google:gemini-2.5-flash`, `anthropic:claude-haiku-4-5`) or a Model
 object (tests pass `TestModel`).
 """
 

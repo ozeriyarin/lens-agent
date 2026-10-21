@@ -17,7 +17,7 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 
 ## Stack (locked for v1)
 - Python 3.12, FastAPI, **Pydantic AI**, SQLite, Pillow + imagehash
-- Vision: `google-gla:gemini-*-flash` default, `anthropic:claude-haiku-*` escalation, selected by `MODEL` env var
+- Vision: `google:gemini-*-flash` default, `anthropic:claude-haiku-*` escalation, selected by `MODEL` env var
 - Client: single-file PWA (`static/index.html`), vanilla JS camera API, tap-to-scan in v1
 - Dev tunnel for HTTPS on the phone: `cloudflared tunnel --url http://localhost:8000`
 

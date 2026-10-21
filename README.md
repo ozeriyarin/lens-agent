@@ -56,7 +56,7 @@ uv run uvicorn app.main:app --port 8000
 
 | variable | default | meaning |
 |---|---|---|
-| `MODEL` | `google-gla:gemini-2.5-flash` | Pydantic AI model string. `anthropic:claude-haiku-4-5` for the escalation tier, `test` for demo mode. |
+| `MODEL` | `google:gemini-2.5-flash` | Pydantic AI model string. `anthropic:claude-haiku-4-5` for the escalation tier, `test` for demo mode. |
 | `BUDGET_USD` | `5` | Monthly cap. A scan that would exceed it gets HTTP 402 and no model call. |
 | `DB_PATH` | `lens.db` | SQLite spend ledger (gitignored). |
 | `SCAN_TOKEN` | empty | Shared secret for `/scan` and `/stats`. **Set it before tunnelling.** |

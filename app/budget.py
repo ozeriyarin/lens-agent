@@ -37,7 +37,7 @@ from typing import Literal
 # USD per 1M tokens: (input, output). Checked 2026-10 against provider price pages.
 # Gemini Flash has a free tier; these are the paid-tier numbers, i.e. worst case.
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
-    "google-gla:gemini-2.5-flash": (0.30, 2.50),
+    "google:gemini-2.5-flash": (0.30, 2.50),
     "anthropic:claude-haiku-4-5": (1.00, 5.00),
 }
 # Unknown model string -> assume the most expensive tier we know. Refusing a

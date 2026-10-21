@@ -6,6 +6,6 @@
 - [x] T4 Agent: Pydantic AI agent with system prompt and `ScanResult` output (app/agent.py)
 - [x] T5 API: `POST /scan`, `GET /stats`, static hosting (app/main.py)
 - [x] T6 PWA: camera, scan button, question box, result cards (static/index.html)
-- [ ] T7 Run locally with a real key, scan a desk, verify ledger rows
+- [x] T7 Run locally with a real key, scan a desk, verify ledger rows
 - [ ] T8 Tunnel to phone over HTTPS, verify camera works on mobile
 - [x] T9 Write README "how to run" from a clean machine

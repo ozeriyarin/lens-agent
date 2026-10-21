@@ -25,3 +25,4 @@ static/index.html  --POST /scan (jpeg, question)-->  app/main.py (FastAPI)
 - Camera API needs HTTPS → use `cloudflared tunnel` or ngrok during dev.
 - Vision bbox quality varies by model → bbox is optional in v1.
 - Pydantic AI API surface changes between releases → pin version in requirements.
+  (Hit on day one: 2.59 renamed the Gemini API provider prefix from `google-gla:` to `google:`.)

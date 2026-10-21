@@ -20,7 +20,7 @@ from app.budget import (
     estimate_scan_cost,
 )
 
-GEMINI = "google-gla:gemini-2.5-flash"
+GEMINI = "google:gemini-2.5-flash"
 HAIKU = "anthropic:claude-haiku-4-5"
 NOW = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
 

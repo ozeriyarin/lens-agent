@@ -13,7 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-DEFAULT_MODEL = "google-gla:gemini-2.5-flash"
+DEFAULT_MODEL = "google:gemini-2.5-flash"
 
 
 @dataclass(frozen=True)
