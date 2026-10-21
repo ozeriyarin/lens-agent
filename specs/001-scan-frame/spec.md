@@ -22,7 +22,10 @@ The person types a question ("is this plant healthy?") before scanning. The answ
 - Someone finds the public tunnel URL → with `SCAN_TOKEN` set they get 401 and spend nothing.
 
 ## Functional requirements
-- FR-1: `POST /scan` accepts a JPEG (multipart) and optional `question` text.
+- FR-1: `POST /scan` accepts the frame as the raw request body (`Content-Type: image/jpeg` or
+  `image/png`) and an optional URL-encoded `X-Question` header. Not multipart: the framework
+  spools multipart parts over 1 MB to a temp file on disk, which constitution IV forbids.
+  (Changed 2026-10-21 after review.)
 - FR-2: Response is a `ScanResult` with a list of `DetectedObject`, each with `label`, `category`, `position`, `confidence`, optional `bbox` (normalized 0..1), optional `mood`, optional `age_range`, optional `answer`.
 - FR-3: Images are resized to a max side of 1024px before any model call.
 - FR-4: A perceptual hash of the resized image is compared with the last N hashes; a near-duplicate returns the cached result.

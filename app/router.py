@@ -19,6 +19,7 @@ Failure rules differ by tier on purpose:
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 from pydantic_ai import Agent
@@ -83,13 +84,15 @@ class Router:
         """reserve -> scan -> settle, returning (outcome, ledger entry). Raises on any failure
         after marking the reservation failed; raises BudgetExceeded before any call."""
         request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier)
+        started = time.perf_counter()
         try:
             outcome = await scan(agent, frame, question)
         except AgentFailed as e:
-            self.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens)
+            self.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens,
+                             latency_ms=int((time.perf_counter() - started) * 1000))
             raise
         except BaseException:
-            self.budget.fail(request_id)
+            self.budget.fail(request_id, latency_ms=int((time.perf_counter() - started) * 1000))
             raise
         entry = self.budget.settle(
             request_id,

@@ -19,7 +19,6 @@ import time
 from dataclasses import dataclass
 
 from pydantic_ai import Agent, BinaryContent
-from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded
 from pydantic_ai.models import Model
 from pydantic_ai.usage import RunUsage, UsageLimits
 
@@ -112,7 +111,10 @@ async def scan(agent: Agent[None, ScanResult], frame: PreparedFrame, question: s
     usage = RunUsage()  # passed in so we still have the numbers if the run raises
     try:
         run = await agent.run(_prompt(frame, question), usage_limits=SCAN_USAGE_LIMITS, usage=usage)
-    except (UnexpectedModelBehavior, UsageLimitExceeded) as e:
+    except Exception as e:
+        # Any failure after the request went out (schema retries exhausted, usage limit,
+        # provider 5xx on the retry, transport error) must carry the tokens already spent,
+        # or the ledger under-charges the attempt.
         raise AgentFailed(str(e), input_tokens=usage.input_tokens or 0, output_tokens=usage.output_tokens or 0) from e
     usage = run.usage
     return ScanOutcome(

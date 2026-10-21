@@ -24,7 +24,9 @@ from typing import Annotated
 
 import secrets
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from urllib.parse import unquote
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -153,15 +155,32 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
 
     Svc = Annotated[Services, Depends(services)]
 
-    @app.post("/scan", response_model=ScanResponse)
+    @app.post("/scan", response_model=ScanResponse, openapi_extra={
+        "requestBody": {"required": True, "content": {
+            "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+            "image/png": {"schema": {"type": "string", "format": "binary"}}}}})
     async def scan_frame(
         svc: Svc,
-        image: Annotated[UploadFile, File(description="JPEG/PNG frame from the camera")],
-        question: Annotated[str | None, Form(max_length=MAX_QUESTION_CHARS)] = None,
+        request: Request,
+        x_question: Annotated[str | None, Header(description="Optional question, URL-encoded UTF-8")] = None,
     ) -> ScanResponse:
-        raw = await image.read(MAX_UPLOAD_BYTES + 1)
-        if len(raw) > MAX_UPLOAD_BYTES:
-            raise HTTPException(413, "image larger than 12 MB")
+        # The frame is the raw request body, not a multipart form: Starlette spools
+        # multipart parts over 1 MB to a temp file on disk, and constitution IV says raw
+        # frames never touch disk. Reading the stream ourselves also lets us stop at the
+        # byte limit instead of ingesting the whole upload first.
+        if not (request.headers.get("content-type") or "").startswith("image/"):
+            raise HTTPException(415, "send the frame as the request body with Content-Type image/jpeg or image/png")
+        chunks: list[bytes] = []
+        size = 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > MAX_UPLOAD_BYTES:
+                raise HTTPException(413, "image larger than 12 MB")
+            chunks.append(chunk)
+        raw = b"".join(chunks)
+        question = unquote(x_question) if x_question else None
+        if question and len(question) > MAX_QUESTION_CHARS:
+            raise HTTPException(422, f"question longer than {MAX_QUESTION_CHARS} characters")
         try:
             frame = prepare(raw)  # FR-3: downscaled, in memory only
         except BadImage as e:

@@ -20,7 +20,7 @@
   #stats { font-size: 13px; color: var(--muted); white-space: nowrap; }
   #stage { position: relative; background: #000; border-radius: 14px; overflow: hidden; aspect-ratio: 3 / 4; }
   video, canvas#shot { width: 100%; height: 100%; object-fit: cover; display: block; }
-  canvas#shot { position: absolute; inset: 0; display: none; }
+  canvas#shot { position: absolute; inset: 0; display: none; object-fit: contain; }
   #overlay { position: absolute; inset: 0; pointer-events: none; }
   .box { position: absolute; border: 2px solid var(--accent); border-radius: 6px; }
   .box span { position: absolute; left: -2px; top: -22px; background: var(--accent); color: #000;
@@ -44,6 +44,19 @@
   .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
   .badge.cached { background: #1f3b2a; color: var(--ok); }
   .badge.paid { background: #3b2f1f; color: var(--warn); }
+  .badge.esc { background: #3a1f3b; color: #e6a3ff; }
+  #stats { cursor: pointer; text-decoration: underline dotted; }
+  #panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; font-size: 14px; }
+  #panel[hidden] { display: none; }
+  #panel h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; }
+  #panel h2 button { padding: 2px 10px; font-size: 13px; }
+  #panel table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+  #panel th, #panel td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); font-weight: 400; }
+  #panel th { color: var(--muted); font-size: 12px; }
+  #panel td.num, #panel th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 4px 0 10px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .bar i.warn { background: var(--warn); }
   .empty { text-align: center; color: var(--muted); padding: 24px 0; }
 </style>
 </head>
@@ -53,6 +66,8 @@
     <h1>lens-agent</h1>
     <div id="stats" title="month-to-date spend / cap">…</div>
   </header>
+
+  <section id="panel" hidden></section>
 
   <div id="stage">
     <video id="cam" autoplay playsinline muted></video>
@@ -127,6 +142,9 @@ function captureJpeg() {
   const scale = Math.min(1, MAX_UPLOAD_SIDE / Math.max(vw, vh));
   shot.width = Math.round(vw * scale); shot.height = Math.round(vh * scale);
   shot.getContext('2d').drawImage(video, 0, 0, shot.width, shot.height);
+  // The stage adopts the frame's own aspect ratio so nothing is cropped and the normalized
+  // bbox coordinates map 1:1 onto the frozen image.
+  $('stage').style.aspectRatio = `${shot.width} / ${shot.height}`;
   shot.style.display = 'block';               // freeze the frame the result refers to
   return new Promise((resolve) => shot.toBlob(resolve, 'image/jpeg', 0.85));
 }
@@ -138,9 +156,39 @@ async function refreshStats() {
     const res = await fetch('/stats', { headers: authHeaders() });
     if (res.status === 401) { setStatus('This server needs a token: open the page as /#token=YOUR_TOKEN once.', true); return; }
     const s = await res.json();
-    $('stats').textContent = `${fmtUsd(s.month_to_date_usd)} / $${s.cap_usd.toFixed(0)} · ${s.model}`;
+    lastStats = s;
+    $('stats').textContent = `${fmtUsd(s.month_to_date_usd)} / $${s.cap_usd.toFixed(0)} · ${s.model.split(':').pop()}`;
+    if (!$('panel').hidden) renderPanel(s);
   } catch { $('stats').textContent = ''; }
 }
+
+/* Stats panel (002 FR-6): the same numbers /stats returns, no chart library. */
+let lastStats = null;
+function renderPanel(s) {
+  const pct = Math.min(100, (s.month_to_date_usd / s.cap_usd) * 100);
+  const rows = s.per_model.map((m) => `<tr><td>${escapeHtml(m.model.split(':').pop())}</td>
+      <td class="num">${m.calls}${m.failed ? ` <span class="meta">(${m.failed} failed)</span>` : ''}</td>
+      <td class="num">${fmtUsd(m.cost_usd)}</td><td class="num">${m.avg_latency_ms} ms</td></tr>`).join('');
+  const recent = s.recent.slice(-10).reverse().map((e) => `<tr><td>${e.ts.slice(11, 19)}</td>
+      <td>${escapeHtml(e.model.split(':').pop())}${e.tier === 'escalation' ? ' <span class="badge esc">esc</span>' : ''}${e.status === 'failed' ? ' <span class="badge paid">failed</span>' : ''}</td>
+      <td class="num">${e.input_tokens}/${e.output_tokens}</td><td class="num">${fmtUsd(e.cost_usd)}</td></tr>`).join('');
+  const hitRate = s.cache_hits + s.cache_misses ? Math.round(100 * s.cache_hits / (s.cache_hits + s.cache_misses)) : 0;
+  $('panel').innerHTML = `
+    <h2>This month <button type="button" class="secondary" id="closePanel">close</button></h2>
+    <div>${fmtUsd(s.month_to_date_usd)} of $${s.cap_usd.toFixed(2)} spent · ${fmtUsd(s.remaining_usd)} left</div>
+    <div class="bar"><i class="${pct > 80 ? 'warn' : ''}" style="width:${pct}%"></i></div>
+    <div class="meta">${s.scans_this_month} scans · ${s.escalations} escalated${s.escalation_model ? ` to ${escapeHtml(s.escalation_model.split(':').pop())}` : ' (escalation off)'} · cache hit rate ${hitRate}%</div>
+    <table><tr><th>model</th><th class="num">calls</th><th class="num">cost</th><th class="num">avg latency</th></tr>${rows || '<tr><td colspan="4" class="meta">no calls yet</td></tr>'}</table>
+    <table><tr><th>time (UTC)</th><th>model</th><th class="num">tokens in/out</th><th class="num">cost</th></tr>${recent || '<tr><td colspan="4" class="meta">no scans yet</td></tr>'}</table>`;
+  $('closePanel').onclick = () => { $('panel').hidden = true; };
+}
+$('stats').addEventListener('click', async () => {
+  const panel = $('panel');
+  if (!panel.hidden) { panel.hidden = true; return; }
+  panel.hidden = false;
+  if (lastStats) renderPanel(lastStats);
+  await refreshStats();
+});
 
 function estimate(e, label) {
   if (!e) return '';
@@ -150,9 +198,10 @@ function estimate(e, label) {
 function render(resp) {
   const r = resp.result;
   overlay.innerHTML = '';
-  const badge = resp.cached
+  const badge = (resp.cached
     ? '<span class="badge cached">cached · free</span>'
-    : `<span class="badge paid">${fmtUsd(resp.cost_usd)} · ${resp.latency_ms} ms</span>`;
+    : `<span class="badge paid">${fmtUsd(resp.cost_usd)} · ${resp.latency_ms} ms</span>`)
+    + (resp.escalated ? `<span class="badge esc" title="primary: ${escapeHtml(resp.primary_model)}">escalated → ${escapeHtml(resp.model.split(':').pop())}</span>` : '');
   let html = `<div class="scene">${escapeHtml(r.scene)} ${badge}</div>`;
   if (r.answer) html += `<div class="card"><div class="answer">${escapeHtml(r.answer)}</div></div>`;
   if (!r.objects.length) html += '<div class="empty">Nothing identifiable in this frame.</div>';
@@ -182,11 +231,11 @@ $('scanForm').addEventListener('submit', async (ev) => {
   setStatus('Scanning…');
   try {
     const blob = await captureJpeg();
-    const form = new FormData();
-    form.append('image', blob, 'frame.jpg');
     const q = $('question').value.trim();
-    if (q) form.append('question', q);
-    const res = await fetch('/scan', { method: 'POST', body: form, headers: authHeaders() });
+    // Raw body, not multipart: the server never spools the frame to disk (constitution IV).
+    const headers = { ...authHeaders(), 'Content-Type': 'image/jpeg' };
+    if (q) headers['X-Question'] = encodeURIComponent(q);
+    const res = await fetch('/scan', { method: 'POST', body: blob, headers });
     if (!res.ok) {
       const detail = (await res.json().catch(() => ({}))).detail;
       throw new Error(`${res.status}: ${typeof detail === 'string' ? detail : 'request failed'}`);
@@ -196,6 +245,7 @@ $('scanForm').addEventListener('submit', async (ev) => {
     againBtn.hidden = false;
   } catch (err) {
     setStatus(err.message, true);
+    shot.style.display = 'none'; overlay.innerHTML = '';  // back to the live preview to re-aim
     scanBtn.disabled = false;
   }
   refreshStats();
@@ -203,6 +253,7 @@ $('scanForm').addEventListener('submit', async (ev) => {
 
 againBtn.addEventListener('click', () => {
   shot.style.display = 'none'; overlay.innerHTML = ''; results.innerHTML = '';
+  $('stage').style.aspectRatio = '';  // back to the default live-preview shape
   againBtn.hidden = true; scanBtn.disabled = false;
   setStatus('Point at a scene and tap Scan.');
 });

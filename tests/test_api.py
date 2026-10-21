@@ -24,9 +24,13 @@ def make_client(tmp_path, model=None, cap=5.0):
     return TestClient(app), settings
 
 
-def post_scan(client, image: bytes, question: str | None = None):
-    data = {"question": question} if question else {}
-    return client.post("/scan", files={"image": ("frame.jpg", image, "image/jpeg")}, data=data)
+def post_scan(client, image: bytes, question: str | None = None, headers: dict | None = None):
+    from urllib.parse import quote
+
+    h = {"Content-Type": "image/jpeg", **(headers or {})}
+    if question:
+        h["X-Question"] = quote(question)
+    return client.post("/scan", content=image, headers=h)
 
 
 def test_scan_returns_objects_and_costs_something(tmp_path):
@@ -98,6 +102,30 @@ def test_garbage_upload_is_a_400(tmp_path):
         assert post_scan(client, b"not an image").status_code == 400
 
 
+def test_multipart_is_refused_so_frames_never_spool_to_disk(tmp_path):
+    client, _ = make_client(tmp_path)
+    with client:
+        r = client.post("/scan", files={"image": ("f.jpg", make_scene(7), "image/jpeg")})
+        assert r.status_code == 415
+
+
+def test_oversized_body_is_cut_off_at_the_limit(tmp_path):
+    from app.main import MAX_UPLOAD_BYTES
+
+    client, settings = make_client(tmp_path)
+    with client:
+        r = post_scan(client, b"\xff\xd8" + b"\0" * (MAX_UPLOAD_BYTES + 10))
+        assert r.status_code == 413
+        assert Budget(settings.db_path, 5).entries() == []
+
+
+def test_unicode_question_round_trips_through_the_header(tmp_path):
+    client, _ = make_client(tmp_path)
+    with client:
+        r = post_scan(client, make_scene(7), question="מה יש פה?")
+        assert r.status_code == 200
+
+
 def test_stats_reports_cap_and_spend(tmp_path):
     client, settings = make_client(tmp_path)
     with client:
@@ -118,8 +146,7 @@ def test_token_guards_paid_endpoints_when_set(tmp_path):
         assert post_scan(client, make_scene(7)).status_code == 401
         assert client.get("/stats", headers={"Authorization": "Bearer wrong"}).status_code == 401
         assert client.get("/stats", headers={"Authorization": "Bearer s3cret"}).status_code == 200
-        ok = client.post("/scan", files={"image": ("f.jpg", make_scene(7), "image/jpeg")},
-                         headers={"Authorization": "Bearer s3cret"})
+        ok = post_scan(client, make_scene(7), headers={"Authorization": "Bearer s3cret"})
         assert ok.status_code == 200
         assert len(Budget(settings.db_path, 5).entries()) == 1  # the 401s cost nothing
 

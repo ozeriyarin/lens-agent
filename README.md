@@ -81,9 +81,10 @@ local storage and strips it from the address bar. Allow camera access, point, ta
 
 ## Endpoints
 
-- `POST /scan` multipart `image` (JPEG/PNG, ≤12 MB) + optional `question` (≤500 chars)
-  → `ScanResponse` `{result, cached, request_id, model, cost_usd, latency_ms}`.
-  Errors: 400 bad image, 401 token, 402 budget reached, 413 too large, 502 model failed.
+- `POST /scan` body = the JPEG/PNG bytes (`Content-Type: image/jpeg`, ≤12 MB), optional
+  `X-Question` header (URL-encoded, ≤500 chars)
+  → `ScanResponse` `{result, cached, request_id, model, primary_model, escalated, cost_usd, latency_ms}`.
+  Errors: 400 bad image, 401 token, 402 budget reached, 413 too large, 415 not an image body, 502 model failed.
 - `GET /stats` cap, month-to-date, remaining, cache hit/miss counters, recent ledger rows.
 - `GET /` the PWA. Interactive API docs at `/docs`.
 
