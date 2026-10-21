@@ -96,7 +96,18 @@ class DetectedObject(BaseModel):
     category: Category
     position: Position = "unknown"
     confidence: float = Field(ge=0, le=1, description="How sure the model is that this object is present")
-    bbox: BBox | None = None
+    # Model-facing box. Gemini was trained to localize as [ymin, xmin, ymax, xmax] on 0..1000;
+    # asking for that format gives much tighter boxes than our own x/y/w/h convention did.
+    # It is converted to `bbox` on validation and never serialized to clients.
+    box_2d: list[int] | None = Field(
+        default=None,
+        exclude=True,
+        min_length=4,
+        max_length=4,
+        description="Tight bounding box as [ymin, xmin, ymax, xmax], integers on a 0..1000 scale "
+                    "where 0,0 is the top-left of the image. Prefer this over bbox.",
+    )
+    bbox: BBox | None = Field(default=None, description="Alternative to box_2d: normalized x,y,w,h. Leave empty if box_2d is given.")
     person: PersonDetails | None = None
     answer: str | None = Field(default=None, description="Answer to the user's question, if it concerns this object")
 
@@ -104,6 +115,19 @@ class DetectedObject(BaseModel):
     def _person_details_only_for_people(self) -> "DetectedObject":
         if self.person is not None and self.category != "person":
             raise ValueError("person details are only allowed when category == 'person'")
+        return self
+
+    @model_validator(mode="after")
+    def _box_2d_to_bbox(self) -> "DetectedObject":
+        if self.box_2d is None:
+            return self
+        ymin, xmin, ymax, xmax = self.box_2d
+        if not all(0 <= v <= 1000 for v in self.box_2d):
+            raise ValueError("box_2d values must be within 0..1000")
+        if ymax <= ymin or xmax <= xmin:
+            raise ValueError("box_2d must satisfy ymin < ymax and xmin < xmax")
+        if self.bbox is None:
+            self.bbox = BBox(x=xmin / 1000, y=ymin / 1000, w=(xmax - xmin) / 1000, h=(ymax - ymin) / 1000)
         return self
 
 

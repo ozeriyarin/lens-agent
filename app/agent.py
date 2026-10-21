@@ -40,12 +40,11 @@ Rules:
   standing, ...). Use "unknown" rather than guessing.
 - `confidence` is how sure you are the object is present, 0..1. Be honest: a blurry
   or partly hidden object gets a lower number.
-- `bbox` is optional. Only include it when you can place the object reasonably well.
-  Convention, exactly: x = left edge / image width, y = top edge / image height,
-  w = box width / image width, h = box height / image height, all 0..1. So a box
-  covering the right half of the image is x=0.5, y=0, w=0.5, h=1. Do NOT use
-  [ymin, xmin, ymax, xmax] or a 0..1000 scale. The box should be tight around the
-  visible object.
+- Give every object you can localize a `box_2d`: [ymin, xmin, ymax, xmax] as integers on
+  a 0..1000 scale (0,0 = top-left). The box must be TIGHT: it touches the outermost
+  visible pixels of the object on all four sides, no margin, and it covers the whole
+  object (a person's box runs from the top of the head to the lowest visible part).
+  A box for the right half of the image is [0, 500, 1000, 1000]. Leave `bbox` empty.
 - For a person, fill `person.mood` and `person.age_range` as *estimates with a
   confidence*. Never state them as facts. Do not try to identify who the person is.
 - `scene` is one plain sentence describing the whole picture.

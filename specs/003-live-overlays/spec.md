@@ -25,7 +25,7 @@ answer updates as the scene changes (e.g. "is the door open?").
 
 ### Tertiary
 The person watches the cost: the header shows this session's live spend and a projection
-per minute at the current send rate. Toggling Live off freezes the last overlay.
+per minute at the current send rate. Toggling Live off clears the overlay.
 
 ### Edge cases
 - Scene changed slightly (lighting flicker, hand tremor) → client motion gate says "same",
@@ -59,6 +59,21 @@ per minute at the current send rate. Toggling Live off freezes the last overlay.
 - FR-8 **Overlay coordinates match the pixels.** Boxes are positioned on the same canvas size
   as the frame that was sent, scaled to the displayed video; aspect ratio is never cropped
   while live.
+- FR-9 **Boxes follow their objects between model results** (added after the first phone test).
+  On each result the page keeps a small grayscale crop per box from the frame that was sent;
+  ~8 times a second it matches that crop near the box's last position in the live video and
+  moves the box. A box that cannot be matched (object gone or changed) is dropped until the
+  next result. No model call, no cost.
+- FR-10 **Native box format.** The model is asked for `box_2d = [ymin, xmin, ymax, xmax]` on
+  0..1000 (what Gemini was trained on); the server converts it to the API's normalized
+  `bbox`. Boxes must be tight and cover the whole object.
+- FR-11 **Send when changed *and* still.** A live frame goes out only when the view differs from
+  the last sent frame by more than the chosen sensitivity (low/medium/high) *and* has stopped
+  moving since the previous tick. Panning or shake never triggers a scan.
+- FR-12 **Front camera.** A Flip control switches rear/front, mid-live or between scans; the
+  selfie preview is mirrored with the overlay text drawn readable.
+- FR-13 **Fast scans.** Model "thinking" is off for scans and live frames ask for brief output
+  (<= 6 objects, short scene): measured on the phone 2.1-2.8 s per frame instead of 4-13 s.
 
 ## Non-goals (this feature)
 Object tracking between frames, per-object escalation, a local detector (YOLO) — revisit if

@@ -114,7 +114,15 @@ const MAX_UPLOAD_SIDE = 1280;
 const SENSITIVITY = { low: 16, medium: 10, high: 6 };   // CHANGED threshold, mean abs diff 0..255
 const STILL_THRESHOLD = 4;                              // STILL threshold between consecutive ticks
 const THUMB_W = 16, THUMB_H = 12;
-const STALE_MS = 4000;            // overlay dims after this (003 FR-5)
+const STALE_MS = 8000;            // overlay dims after this (003 FR-5); it is only replaced by the next result
+/* Tracker (003, "moving boxes"): between model results each box follows its object. On every
+   result we remember a small grayscale crop of each box from the frame that was sent; a few
+   times a second we look for that crop near the box's last position in the live video and
+   move the box there. Pure JS, no model, no cost. A box whose crop can no longer be matched
+   (object left the frame or changed too much) is dropped. */
+const TRACK_FPS = 8, TRACK_W = 160;         // working resolution: long side 160 px
+const TRACK_SEARCH = 0.35;                  // search radius as a fraction of the box size
+const TRACK_LOST = 38;                      // mean abs diff above this (0..255) = lost
 
 /* --- auth: shared secret from #token=, kept in localStorage, sent as Bearer ------------- */
 const TOKEN_KEY = 'lens.token';
@@ -225,11 +233,11 @@ async function postScan(blob, question, live) {
 
 /* --- overlay renderer (003 FR-4, FR-5) ---------------------------------------------------- */
 let lastResponse = null, lastDrawnAt = 0;
-function drawOverlay(resp, stale = false) {
+function drawOverlay(resp, stale = false, tracked = null) {
   const W = overlay.width, H = overlay.height;
   const g = overlay.getContext('2d');
   g.clearRect(0, 0, W, H);
-  if (!resp) return;
+  if (!resp) { tracker.clear(); return; }
   const r = resp.result;
   const base = Math.max(12, Math.round(Math.min(W, H) / 40));   // font scales with the frame
   g.globalAlpha = stale ? 0.45 : 1;
@@ -261,8 +269,10 @@ function drawOverlay(resp, stale = false) {
       if (o.person.age_range) lines.push(`age: ${o.person.age_range.value.replace('_', ' ')} (~${Math.round(o.person.age_range.confidence * 100)}%)`);
     }
     if (o.answer) lines.push(`→ ${o.answer}`);
-    if (!o.bbox) { unboxed.push(lines[0]); continue; }
-    const x = o.bbox.x * W, y = o.bbox.y * H, w = o.bbox.w * W, h = o.bbox.h * H;
+    const box = tracked ? tracked.get(o) : o.bbox;   // tracked position if we have one, else the model's
+    if (box === null) continue;                        // tracked and lost: not on screen any more
+    if (!box) { unboxed.push(lines[0]); continue; }
+    const x = box.x * W, y = box.y * H, w = box.w * W, h = box.h * H;
     const color = o.category === 'person' ? '#ffb340' : '#5ac8fa';
     g.strokeStyle = color; g.strokeRect(x, y, w, h);
     const block = lines.length * base * 1.25 + base * 0.6;
@@ -288,8 +298,8 @@ function drawOverlay(resp, stale = false) {
   if (mirrored) g.restore();
   g.globalAlpha = 1;
 }
-setInterval(() => {  // staleness fade while live
-  if (live.on && lastResponse && Date.now() - lastDrawnAt > STALE_MS) drawOverlay(lastResponse, true);
+setInterval(() => {  // staleness fade while live (the tracker redraws on its own when it has boxes)
+  if (live.on && lastResponse && !tracker.items.length && Date.now() - lastDrawnAt > STALE_MS) drawOverlay(lastResponse, true);
 }, 1000);
 
 /* --- cards (001) ---------------------------------------------------------------------------- */
@@ -319,7 +329,66 @@ function showResponse(resp) {
   lastResponse = resp; lastDrawnAt = Date.now();
   drawOverlay(resp);
   renderCards(resp);
+  if (live.on) tracker.arm(resp, shot);   // shot holds the exact frame the boxes refer to
 }
+
+/* --- tracker ---------------------------------------------------------------------------------- */
+const tracker = {
+  items: [], timer: null, work: document.createElement('canvas'), scale: 1,
+  gray(srcEl, sw, sh) {
+    const w = this.work; if (w.width !== sw || w.height !== sh) { w.width = sw; w.height = sh; }
+    const g = w.getContext('2d', { willReadFrequently: true });
+    g.drawImage(srcEl, 0, 0, sw, sh);
+    const d = g.getImageData(0, 0, sw, sh).data, out = new Uint8Array(sw * sh);
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) out[j] = (d[i] * 77 + d[i + 1] * 151 + d[i + 2] * 28) >> 8;
+    return out;
+  },
+  arm(resp, frameEl) {
+    this.clear();
+    const [fw, fh] = [frameEl.width, frameEl.height];
+    if (!fw || !fh) return;
+    this.scale = TRACK_W / Math.max(fw, fh);
+    const sw = Math.round(fw * this.scale), sh = Math.round(fh * this.scale);
+    const frame = this.gray(frameEl, sw, sh);
+    for (const o of resp.result.objects) {
+      if (!o.bbox) continue;
+      const x = Math.round(o.bbox.x * sw), y = Math.round(o.bbox.y * sh);
+      const w = Math.max(4, Math.round(o.bbox.w * sw)), h = Math.max(4, Math.round(o.bbox.h * sh));
+      if (w * h > sw * sh * 0.6) { this.items.push({ o, x, y, w, h, tpl: null, lost: false }); continue; } // near-full-frame box: pin, don't track
+      const tpl = new Uint8Array(w * h);
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) tpl[j * w + i] = frame[Math.min(sh - 1, y + j) * sw + Math.min(sw - 1, x + i)];
+      this.items.push({ o, x, y, w, h, tpl, lost: false });
+    }
+    this.sw = sw; this.sh = sh;
+    if (!this.timer) this.timer = setInterval(() => this.step(), 1000 / TRACK_FPS);
+  },
+  clear() { this.items = []; if (this.timer) { clearInterval(this.timer); this.timer = null; } },
+  step() {
+    if (!this.items.length || !lastResponse || document.hidden) return;
+    const [fw, fh] = sourceSize(); if (!fw) return;
+    const sw = this.sw, sh = this.sh;
+    let frame; try { frame = this.gray(frameSource, sw, sh); } catch { return; }
+    for (const it of this.items) {
+      if (!it.tpl || it.lost) continue;
+      const rx = Math.max(2, Math.round(it.w * TRACK_SEARCH)), ry = Math.max(2, Math.round(it.h * TRACK_SEARCH));
+      let best = Infinity, bx = it.x, by = it.y;
+      const step = it.w * it.h > 1500 ? 2 : 1;   // sample big templates sparsely
+      for (let dy = -ry; dy <= ry; dy += 2) for (let dx = -rx; dx <= rx; dx += 2) {
+        const x0 = it.x + dx, y0 = it.y + dy;
+        if (x0 < -it.w * 0.5 || y0 < -it.h * 0.5 || x0 > sw - it.w * 0.5 || y0 > sh - it.h * 0.5) continue;
+        let sum = 0, n = 0;
+        for (let j = 0; j < it.h; j += step) { const yy = y0 + j; if (yy < 0 || yy >= sh) continue;
+          for (let i = 0; i < it.w; i += step) { const xx = x0 + i; if (xx < 0 || xx >= sw) continue;
+            sum += Math.abs(frame[yy * sw + xx] - it.tpl[j * it.w + i]); n++; } }
+        if (n && sum / n < best) { best = sum / n; bx = x0; by = y0; }
+      }
+      if (best > TRACK_LOST || bx + it.w < 0 || by + it.h < 0 || bx > sw || by > sh) { it.lost = true; continue; }
+      it.x = bx; it.y = by;
+    }
+    const tracked = new Map(this.items.map((it) => [it.o, it.lost ? null : { x: it.x / sw, y: it.y / sh, w: it.w / sw, h: it.h / sh }]));
+    drawOverlay(lastResponse, Date.now() - lastDrawnAt > STALE_MS, tracked);
+  },
+};
 
 /* --- stats header + panel (002 FR-6) ------------------------------------------------------- */
 let lastStats = null;
@@ -450,7 +519,7 @@ document.addEventListener('visibilitychange', () => { if (live.on) setStatus(doc
 /* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
 window.lens = {
   setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
-  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera,
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse,
 };
 
 startCamera();

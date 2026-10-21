@@ -77,3 +77,28 @@ def test_json_schema_is_exportable():
     schema = ScanResult.model_json_schema()
     assert "objects" in schema["properties"]
     assert schema["$defs"]["DetectedObject"]["properties"]["category"]["enum"][0] == "person"
+
+
+def test_box_2d_is_converted_to_bbox_and_not_serialized():
+    # Gemini's native format: [ymin, xmin, ymax, xmax] on 0..1000.
+    obj = DetectedObject(label="mug", category="other", confidence=0.9, box_2d=[100, 200, 500, 600])
+    assert obj.bbox is not None
+    assert (obj.bbox.x, obj.bbox.y, obj.bbox.w, obj.bbox.h) == (0.2, 0.1, 0.4, 0.4)
+    dumped = obj.model_dump()
+    assert "box_2d" not in dumped and dumped["bbox"]["x"] == 0.2
+    assert "box_2d" in DetectedObject.model_json_schema()["properties"]  # the model still sees it
+
+
+def test_box_2d_rejects_inverted_or_out_of_range_boxes():
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="other", confidence=0.9, box_2d=[500, 200, 100, 600])  # ymax < ymin
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="other", confidence=0.9, box_2d=[0, 0, 1200, 500])  # > 1000
+    with pytest.raises(ValidationError):
+        DetectedObject(label="mug", category="other", confidence=0.9, box_2d=[0, 0, 500])  # 3 values
+
+
+def test_explicit_bbox_wins_over_box_2d():
+    obj = DetectedObject(label="mug", category="other", confidence=0.9, box_2d=[0, 0, 1000, 1000],
+                         bbox=BBox(x=0.1, y=0.1, w=0.2, h=0.2))
+    assert obj.bbox.w == 0.2
