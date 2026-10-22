@@ -37,8 +37,10 @@ as in 003 (template tracker), and the status line says "local boxes: off".
 
 ## Functional requirements
 - FR-1 **Detector.** TensorFlow.js COCO-SSD (`lite_mobilenet_v2`) loaded from a CDN on the
-  first Live start, cached by the browser afterwards. Runs on the live video at ≤ 8 fps on a
-  downscaled frame; returns class, score, box. Score floor 0.5.
+  first Live start, cached by the browser afterwards, on the **WebAssembly backend** (first phone
+  test: the WebGL backend next to the live video broke video rendering on iOS and stalled the
+  page). One warm-up inference after loading. Runs at ≤ 6 fps on a 256 px crop; a watchdog halves
+  the rate when a tick averages > 350 ms and turns the detector off above 900 ms. Score floor 0.5.
 - FR-2 **Local boxes drawn.** Detections are drawn every detector tick with the detector's
   class in a thin, dimmer style; a `local` toggle in the controls turns the detector off (then
   003 behaviour).

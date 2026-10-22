@@ -456,11 +456,19 @@ function showResponse(resp) {
    Gemini keeps the meaning (label, identity, mood, memory, notes). Detections are tracked tick to tick
    by IoU so Gemini data attached to a box stays with it; a change in the set of visible classes is a
    reason to send a frame. Loaded only when Live starts; if it fails, 003 behaviour (template tracker). */
+/* The detector runs on the WebAssembly backend, not WebGL: on iPhones a WebGL context next to
+   the live <video> broke the video rendering (black stage, camera squeezed into a corner) and
+   stalled the page. WASM is CPU-only, isolated from the video pipeline, and fast enough for the
+   lite model on a 256 px crop. */
+const TFJS_VERSION = '4.22.0';
 const DETECTOR_SCRIPTS = [
-  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
+  `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@${TFJS_VERSION}/dist/tf.min.js`,
+  `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@${TFJS_VERSION}/dist/tf-backend-wasm.min.js`,
   'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
 ];
-const DET_FPS = 8, DET_SIDE = 320, DET_SCORE = 0.5, DET_MAX = 12, DET_STALE_MS = 1500, DET_MATCH_IOU = 0.4, FUSE_IOU = 0.3;
+const WASM_PATH = `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@${TFJS_VERSION}/dist/`;
+const DET_FPS = 6, DET_SIDE = 256, DET_SCORE = 0.5, DET_MAX = 12, DET_STALE_MS = 1500, DET_MATCH_IOU = 0.4, FUSE_IOU = 0.3;
+const DET_SLOW_MS = 350, DET_TOO_SLOW_MS = 900;   // watchdog: average tick above these -> halve the rate / give up
 const COCO_CAT = {   // COCO class -> our category (anything missing -> 'other')
   person: 'person', cat: 'animal', dog: 'animal', bird: 'animal', horse: 'animal', sheep: 'animal', cow: 'animal',
   bottle: 'food', 'wine glass': 'other', cup: 'other', bowl: 'food', banana: 'food', apple: 'food', orange: 'food',
@@ -483,25 +491,36 @@ function loadScript(src) {
 const detector = {
   model: null, loading: false, failed: false, timer: null, busy: false, fps: 0, tracks: [], nextId: 1,
   lastClasses: null, classTicks: 0, changed: false, work: document.createElement('canvas'), frames: 0, fpsAt: 0,
+  backend: '', tickMs: 0, rateMs: 1000 / DET_FPS, slowTicks: 0,
   get enabled() { return $('localBoxes').value === 'on' && !this.failed; },
   async load() {
     if (this.model || this.loading || this.failed) return;
     this.loading = true;
     try {
       if (!window.cocoSsd) for (const src of DETECTOR_SCRIPTS) await loadScript(src);
-      this.model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-      setStatus('Local boxes ready.');
+      try { tf.wasm.setWasmPaths(WASM_PATH); await tf.setBackend('wasm'); } catch { await tf.setBackend('cpu'); }
+      await tf.ready();
+      this.backend = tf.getBackend();
+      const model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+      setStatus(`Local boxes: warming up (${this.backend})…`);
+      const warm = document.createElement('canvas'); warm.width = warm.height = DET_SIDE;
+      await model.detect(warm, 1, 0.9);   // first inference compiles kernels: do it once, here, not on a live tick
+      this.model = model;
+      setStatus(`Local boxes ready (${this.backend}).`);
     } catch (err) {
       this.failed = true;
       setStatus(`Local boxes off (${err.message.slice(0, 60)}); cloud boxes + tracker instead.`);
     }
     this.loading = false;
   },
-  start() { if (!this.enabled) return; this.load(); this.tracks = []; this.lastClasses = null; if (!this.timer) this.timer = setInterval(() => this.tick(), 1000 / DET_FPS); },
-  stop() { clearInterval(this.timer); this.timer = null; this.tracks = []; this.busy = false; },
+  schedule() { if (this.timer) clearTimeout(this.timer); this.timer = setTimeout(() => this.loop(), this.rateMs); },
+  async loop() { this.timer = null; if (!live.on || !this.enabled) return; await this.tick(); if (live.on && this.enabled && !this.failed) this.schedule(); },
+  start() { if (!this.enabled) return; this.load(); this.tracks = []; this.lastClasses = null; this.rateMs = 1000 / DET_FPS; this.slowTicks = 0; if (!this.timer) this.schedule(); },
+  stop() { if (this.timer) clearTimeout(this.timer); this.timer = null; this.tracks = []; this.busy = false; },
   async tick() {
     if (!this.model || this.busy || document.hidden || !live.on || !this.enabled) return;
     this.busy = true;
+    const t0 = performance.now();
     try {
       const [sx, sy, sw, sh] = cropRect(); if (!sw) return;
       const scale = Math.min(1, DET_SIDE / Math.max(sw, sh));
@@ -512,6 +531,12 @@ const detector = {
       this.update(preds.map((p) => ({ cls: p.class, score: p.score, x: p.bbox[0] / W, y: p.bbox[1] / H, w: p.bbox[2] / W, h: p.bbox[3] / H })));
       this.frames++; const now = performance.now();
       if (now - this.fpsAt > 1000) { this.fps = Math.round(this.frames * 1000 / (now - (this.fpsAt || now - 1000))); this.frames = 0; this.fpsAt = now; }
+      // Watchdog: a slow device must not freeze the page. Average tick above DET_SLOW_MS halves the
+      // rate; above DET_TOO_SLOW_MS for a while, the detector turns itself off (003 behaviour).
+      const dt = now - t0; this.tickMs = this.tickMs ? 0.7 * this.tickMs + 0.3 * dt : dt;
+      if (this.tickMs > DET_TOO_SLOW_MS && ++this.slowTicks >= 5) { this.failed = true; this.tracks = []; setStatus(`Local boxes off: too slow on this device (${Math.round(this.tickMs)} ms/frame).`); }
+      else if (this.tickMs > DET_SLOW_MS) this.rateMs = Math.min(1000, this.rateMs * 1.5);
+      else if (this.tickMs < DET_SLOW_MS / 2 && this.rateMs > 1000 / DET_FPS) this.rateMs = Math.max(1000 / DET_FPS, this.rateMs / 1.5);
     } catch (err) { setStatus(`Local boxes error: ${err.message.slice(0, 60)}`, true); this.failed = true; }
     finally { this.busy = false; }
   },
@@ -554,7 +579,7 @@ const detector = {
     return m;
   },
   locals() { return this.tracks.filter((t) => !t.attached); },
-  active() { return !!(this.model && this.timer && this.enabled); },
+  active() { return !!(this.model && this.enabled && !this.failed && live.on); },
 };
 $('localBoxes').addEventListener('change', () => { if (live.on) { if (detector.enabled) detector.start(); else { detector.stop(); drawOverlay(lastResponse); } } });
 
@@ -777,7 +802,7 @@ const live = {
     if (!changed || !still) {
       this.skipped++;
       const why = !changed ? (personInFrame ? 'unchanged · face refresh every 6 s' : 'view unchanged') : `moving… (${this.waiting}/${MAX_WAIT_TICKS})`;
-      const det = detector.active() ? ` · local ${detector.tracks.length} boxes @${detector.fps} fps` : '';
+      const det = detector.active() ? ` · local ${detector.tracks.length} boxes @${detector.fps} fps ${detector.backend} ${Math.round(detector.tickMs)} ms` : (detector.loading ? ' · local boxes loading…' : '');
       setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${why} · Δsent ${isFinite(dSent) ? dSent.toFixed(0) : '-'} Δprev ${dPrev.toFixed(0)} (sens ${sens})${det}`);
       return;
     }
