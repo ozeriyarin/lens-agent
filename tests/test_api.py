@@ -307,3 +307,31 @@ def test_scan_with_question_uses_the_knowledge_base_and_reports_sources(tmp_path
         assert "three weeks" in body["result"]["answer"]
         plain = post_scan(client, make_scene(32)).json()  # no question: no tool, no sources
         assert plain["result"]["sources"] == []
+
+
+def test_remote_caller_without_token_gets_no_notes_or_memory_context(tmp_path):
+    from pydantic_ai.messages import ToolCallPart
+
+    notes = tmp_path / "kb"; notes.mkdir()
+    (notes / "plants.md").write_text("# Plants\n\n## Cactus\n\nWater every three weeks.\n", encoding="utf-8")
+    seen: dict = {}
+
+    def fake(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen["tools"] = [t.name for t in info.function_tools]
+        seen["memory_in_prompt"] = any("<memory>" in str(getattr(p, "content", "")) for m in messages for p in m.parts)
+        out = info.output_tools[0]
+        return ModelResponse(parts=[ToolCallPart(tool_name=out.name, args={"scene": "cactus", "objects": [
+            {"label": "cactus", "category": "plant", "confidence": 0.9, "identity": "small cactus in a terracotta pot"}]})])
+
+    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", kb_dir=notes, kb_floor=0.2, memory_threshold=0.65)
+    client = TestClient(create_app(settings, model=FunctionModel(fake, model_name="fake")))
+    with client:
+        post_scan(client, make_scene(41), question="seen this?")  # local: memory gets an entity
+        local = post_scan(client, make_scene(42), question="water?")
+        assert seen["tools"] == ["lookup"] and seen["memory_in_prompt"] is True
+        remote = post_scan(client, make_scene(43), question="water?", headers={"X-Forwarded-For": "203.0.113.9"})
+        assert remote.status_code == 200
+        assert seen["tools"] == [] and seen["memory_in_prompt"] is False  # no notes, no memory for strangers
+        # and a cached question-answer is not served to the stranger either
+        again = post_scan(client, make_scene(42), question="water?", headers={"X-Forwarded-For": "203.0.113.9"}).json()
+        assert again["cached"] is False

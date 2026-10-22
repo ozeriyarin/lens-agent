@@ -1,0 +1,275 @@
+{
+ "created": "2026-10-22T09:01:13+00:00",
+ "tag": "rag",
+ "set": "eval\\set.jsonl",
+ "set_size": 7,
+ "model": "google:gemini-2.5-flash",
+ "escalation_model": "anthropic:claude-haiku-4-5",
+ "fingerprint": "63f8328f6f9a",
+ "summary": {
+  "photos": 7,
+  "errors": 0,
+  "mean_recall": 0.9005,
+  "identity_rate": 1.0,
+  "entity_groups": 6,
+  "identity_recall": 1.0,
+  "identity_precision": 1.0,
+  "forbid_hit_rate": 0.0,
+  "iou_mean": 0.4163,
+  "iou_photos": 2,
+  "answer_accuracy": 1.0,
+  "source_accuracy": 1.0,
+  "lookups": 3,
+  "escalation_rate": 0.0,
+  "mean_cost_usd": 0.002694,
+  "total_cost_usd": 0.01886,
+  "latency_p50_ms": 5238,
+  "latency_p95_ms": 6742,
+  "failures": [
+   {
+    "id": "home-01",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-05",
+    "missed": [
+     "humidity control"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-06",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-07",
+    "missed": [
+     "mustard container",
+     "yellow bottle"
+    ],
+    "forbid_hits": [],
+    "error": null
+   }
+  ]
+ },
+ "photos": [
+  {
+   "id": "home-01",
+   "file": "home-01.jpg",
+   "expected": 9,
+   "matched": 8,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "yellow container",
+    "spice shaker",
+    "green bottle",
+    "dark bottle",
+    "dark bottle"
+   ],
+   "recall": 0.8888888888888888,
+   "iou_mean": 0.6823549505450858,
+   "answer_hit": true,
+   "latency_ms": 6742,
+   "cost_usd": 0.0033904,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "heineken": "bcdc5bbe87b2",
+    "kinder": "5e2118c8e4ad"
+   }
+  },
+  {
+   "id": "home-02",
+   "file": "home-02.jpg",
+   "expected": 8,
+   "matched": 8,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "jar of food",
+    "red container",
+    "bottle"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 5174,
+   "cost_usd": 0.0024408000000000003,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "milk-bottle": "b8bcc667d164",
+    "oat-carton": "0a8b594df3fe",
+    "heineken": "bcdc5bbe87b2",
+    "kinder": "5e2118c8e4ad"
+   }
+  },
+  {
+   "id": "home-03",
+   "file": "home-03.jpg",
+   "expected": 3,
+   "matched": 3,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 5238,
+   "cost_usd": 0.0022047,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "produce.md › Produce (sample knowledge base for the evals) › Yogurt"
+   ],
+   "entity_links": {}
+  },
+  {
+   "id": "home-04",
+   "file": "home-04.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "yogurt cup"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 3097,
+   "cost_usd": 0.0016408,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-05",
+   "file": "home-05.jpg",
+   "expected": 5,
+   "matched": 4,
+   "missed": [
+    "humidity control"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "refrigerator drawer"
+   ],
+   "recall": 0.8,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 4498,
+   "cost_usd": 0.0024576999999999997,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "produce.md › Produce (sample knowledge base for the evals) › Eggplants"
+   ],
+   "entity_links": {}
+  },
+  {
+   "id": "home-06",
+   "file": "home-06.jpg",
+   "expected": 10,
+   "matched": 9,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "spice container"
+   ],
+   "recall": 0.9,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 5893,
+   "cost_usd": 0.0031408,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "house.md › House notes (sample knowledge base for the evals) › Beer"
+   ],
+   "entity_links": {
+    "oat-carton": "0a8b594df3fe",
+    "milk-bottle": "b8bcc667d164",
+    "heineken": "bcdc5bbe87b2",
+    "mustard": "0589730f0cf2"
+   }
+  },
+  {
+   "id": "home-07",
+   "file": "home-07.jpg",
+   "expected": 7,
+   "matched": 5,
+   "missed": [
+    "mustard container",
+    "yellow bottle"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "St. Dalfour jam jar",
+    "St. Dalfour jam jar",
+    "bottle",
+    "bottle",
+    "jar",
+    "jar",
+    "jar"
+   ],
+   "recall": 0.7142857142857143,
+   "iou_mean": 0.15015281038224748,
+   "answer_hit": true,
+   "latency_ms": 6690,
+   "cost_usd": 0.0035804,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "heineken": "bcdc5bbe87b2",
+    "tahini": "c2b373d86036"
+   }
+  }
+ ]
+}

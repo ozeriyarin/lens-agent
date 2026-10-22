@@ -137,6 +137,16 @@ this before?" works. `GET /entities` lists memory, `DELETE /entities/{id}` or `/
 these routes answer only locally unless `SCAN_TOKEN` is set. People are never remembered.
 `MEMORY=off` disables all of it.
 
+## Notes and lookup (feature 005)
+
+Put Markdown notes in `kb/` (gitignored except its README): plant care, who owns what, how to
+use things. `uv run python -m app.kb index` embeds them into passages (one per heading), and
+on a tap scan with a question the agent gets a `lookup` tool it can call once or twice when the
+answer is not in the picture. Answers that rely on a passage cite it; the page shows
+"from your notes: file › heading" under the answer. No relevant passage → the answer says no
+note was found. Live mode never offers the tool, and neither memory nor notes are used for
+callers that fail the local-or-token check. The evals use the sample notes in `eval/kb/`.
+
 ## Evals (feature 006)
 
 Unit tests prove the code; evals measure the model. `eval/set.jsonl` lists photos (kept outside
@@ -175,6 +185,7 @@ app/budget.py   Budget: reserve / settle / fail, SQLite     (the cap)
 app/agent.py    build_agent(), scan()                        (Pydantic AI)
 app/router.py   is_weak(), Router.run()                      (cheap first, escalate once)
 app/memory.py   entities + sightings, link(), context()      (what the agent remembers)
+app/kb.py       notes -> passages -> search(); the lookup tool   (what the agent can look up)
 app/embeddings.py embed() under the ledger                  
 app/evals.py    eval set, scorer, runner, bootstrap, compare   (measure the model)
 app/main.py     FastAPI composition, /scan, /stats           (the wiring)

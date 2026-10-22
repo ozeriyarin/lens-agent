@@ -84,6 +84,16 @@ class StatsResponse(BaseModel):
     recent: list[SpendEntry]
 
 
+def _private_caller(svc: "Services", request: Request) -> bool:
+    """May this request see the owner's private data (memory, notes)? Yes when a token is
+    configured (the bearer check already passed), or when the caller is the local machine
+    with no proxy header in front of it."""
+    if svc.settings.scan_token:
+        return True
+    host = request.client.host if request.client else ""
+    return host in ("127.0.0.1", "::1", "testclient") and not request.headers.get("x-forwarded-for")
+
+
 def _model_label(model: str | Model) -> str:
     return model if isinstance(model, str) else getattr(model, "model_name", "model")
 
@@ -215,14 +225,18 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         except BadImage as e:
             raise HTTPException(400, str(e)) from e
 
-        if (hit := svc.cache.lookup(frame.phash, question)) is not None:  # FR-4: free
+        # Cached answers to questions may carry notes or memory: only private callers share them.
+        if (question is None or _private_caller(svc, request)) and \
+                (hit := svc.cache.lookup(frame.phash, question)) is not None:  # FR-4: free
             return hit.model_copy(update={"cached": True, "cost_usd": 0.0, "latency_ms": 0})
 
         # The router does reserve -> scan -> settle/fail for each tier (001 FR-5/FR-6, 002 FR-1/FR-2).
-        # Memory context (004 FR-6) is read before the scan and only used with a question.
-        context = svc.memory.context() if (question and svc.memory.enabled) else None
+        # Memory context (004 FR-6) and the lookup tool (005) are the owner's private data: only
+        # callers that pass the same check as the memory routes get them.
+        private = _private_caller(svc, request)
+        context = svc.memory.context() if (question and svc.memory.enabled and private) else None
         try:
-            routed = await svc.router.run(frame, question, source=source, context=context or None)
+            routed = await svc.router.run(frame, question, source=source, context=context or None, private=private)
         except BudgetExceeded as e:
             raise HTTPException(402, str(e)) from e
         except AgentFailed as e:
@@ -275,10 +289,8 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         """Memory is personal data. With SCAN_TOKEN set the bearer check above already
         applies. Without one, these routes answer only to the local machine (no proxy
         header, loopback client), so a tunnel or LAN exposure cannot read or wipe it."""
-        if not svc.settings.scan_token:
-            host = request.client.host if request.client else ""
-            if host not in ("127.0.0.1", "::1", "testclient") or request.headers.get("x-forwarded-for"):
-                raise HTTPException(401, "set SCAN_TOKEN to access memory from outside this machine")
+        if not _private_caller(svc, request):
+            raise HTTPException(401, "set SCAN_TOKEN to access memory from outside this machine")
         return svc
 
     Mem = Annotated[Services, Depends(memory_access)]

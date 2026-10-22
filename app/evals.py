@@ -37,7 +37,9 @@ from app.agent import INSTRUCTIONS, LIVE_HINT, SCAN_MODEL_SETTINGS, AgentFailed,
 from app.budget import Budget, BudgetExceeded
 from app.config import Settings
 from app.embeddings import Embeddings, hashing_embed
+from app.agent import lookup_toolset
 from app.gate import BadImage, prepare
+from app.kb import KnowledgeBase
 from app.memory import Memory
 from app.router import Router
 from app.schema import BBox, DetectedObject, ScanResult
@@ -45,6 +47,7 @@ from app.schema import BBox, DetectedObject, ScanResult
 DEFAULT_SET = Path("eval/set.jsonl")
 DEFAULT_RUNS = Path("eval/runs")
 DEFAULT_LEDGER = Path("eval/ledger.db")
+DEFAULT_KB = Path("eval/kb")  # sample notes committed with the set (005)
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 
 
@@ -75,6 +78,7 @@ class EvalItem:
     forbid: list[str] = field(default_factory=list)
     question: str | None = None
     expect_answer_contains: str | None = None
+    source_expected: str | None = None  # 005: a note file the answer must cite
     notes: str | None = None
     draft: bool = False
 
@@ -87,6 +91,7 @@ class EvalItem:
             forbid=list(d.get("forbid", [])),
             question=d.get("question"),
             expect_answer_contains=d.get("expect_answer_contains"),
+            source_expected=d.get("source_expected"),
             notes=d.get("notes"),
             draft=bool(d.get("draft", False)),
         )
@@ -96,7 +101,7 @@ class EvalItem:
             {k: v for k, v in asdict(e).items() if v not in (None, [])} for e in self.expect]}
         if self.forbid:
             d["forbid"] = self.forbid
-        for k in ("question", "expect_answer_contains", "notes"):
+        for k in ("question", "expect_answer_contains", "source_expected", "notes"):
             if getattr(self, k):
                 d[k] = getattr(self, k)
         if self.draft:
@@ -205,6 +210,8 @@ class PhotoScore:
     model: str
     error: str | None = None
     identity_rate: float | None = None  # 004: share of non-person predictions that carry an identity
+    source_hit: bool | None = None  # 005: the expected note file was cited
+    sources: list[str] = field(default_factory=list)
     entity_links: dict[str, str] = field(default_factory=dict)  # 004: expected entity group -> memory entity id
 
 
@@ -239,6 +246,8 @@ def score_photo(item: EvalItem, result: ScanResult | None, *, latency_ms: int = 
         iou_mean=(sum(ious) / len(ious)) if ious else None,
         answer_hit=answer_hit, latency_ms=latency_ms, cost_usd=cost_usd, escalated=escalated, model=model,
         identity_rate=identity_rate, entity_links=links,
+        source_hit=(any(src.file == item.source_expected for src in result.sources) if item.source_expected else None),
+        sources=[f"{src.file} › {src.heading}" for src in result.sources],
     )
 
 
@@ -283,6 +292,7 @@ def summarize(scores: list[PhotoScore]) -> dict:
     ok = [s for s in scores if s.error is None]
     ious = [s.iou_mean for s in ok if s.iou_mean is not None]
     answers = [s.answer_hit for s in ok if s.answer_hit is not None]
+    src_hits = [s.source_hit for s in ok if s.source_hit is not None]
     lat = [float(s.latency_ms) for s in ok]
     id_rates = [s.identity_rate for s in ok if s.identity_rate is not None]
     return {
@@ -295,6 +305,8 @@ def summarize(scores: list[PhotoScore]) -> dict:
         "iou_mean": round(statistics.fmean(ious), 4) if ious else None,
         "iou_photos": len(ious),
         "answer_accuracy": round(sum(answers) / len(answers), 4) if answers else None,
+        "source_accuracy": round(sum(src_hits) / len(src_hits), 4) if src_hits else None,
+        "lookups": sum(1 for s in ok if s.sources),
         "escalation_rate": round(sum(1 for s in ok if s.escalated) / len(ok), 4) if ok else 0.0,
         "mean_cost_usd": round(statistics.fmean(s.cost_usd for s in ok), 6) if ok else 0.0,
         "total_cost_usd": round(sum(s.cost_usd for s in ok), 5),
@@ -316,7 +328,7 @@ def _demo_model() -> Model:
         {"label": "coffee mug", "category": "other", "confidence": 0.8}]})
 
 
-def make_router(settings: Settings, model: str | Model | None, ledger: Path) -> Router:
+def make_router(settings: Settings, model: str | Model | None, ledger: Path, toolset=None) -> Router:
     """Same composition as the app: primary + optional escalation, under the monthly cap."""
     budget = Budget(ledger, settings.budget_usd)
     chosen = model if model is not None else settings.model
@@ -329,7 +341,7 @@ def make_router(settings: Settings, model: str | Model | None, ledger: Path) -> 
             escalation, esc_name = build_agent(settings.escalation_model), settings.escalation_model
         except UserError:
             pass  # no key for the second tier: run without it, the report says which model ran
-    return Router(budget, build_agent(chosen), primary_name, escalation, esc_name, settings.escalate_below)
+    return Router(budget, build_agent(chosen), primary_name, escalation, esc_name, settings.escalate_below, toolset=toolset)
 
 
 def settings_fingerprint() -> str:
@@ -340,7 +352,8 @@ def settings_fingerprint() -> str:
 
 async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model: str | Model | None = None,
               limit: int | None = None, tag: str = "", settings: Settings | None = None,
-              ledger: Path = DEFAULT_LEDGER, runs_dir: Path = DEFAULT_RUNS, write: bool = True) -> dict:
+              ledger: Path = DEFAULT_LEDGER, runs_dir: Path = DEFAULT_RUNS, write: bool = True,
+              kb_dir: Path | None = DEFAULT_KB) -> dict:
     settings = settings or Settings.from_env()
     photos = photos or photos_dir()
     items = scorable(load_set(set_path))
@@ -349,6 +362,14 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
     if not items:
         raise SystemExit(f"no scorable items in {set_path} (drafts are skipped)")
     router = make_router(settings, model, ledger)
+    # 005: the sample notes, indexed into the eval ledger's db, offered as the lookup tool.
+    real_model = model is None or (isinstance(model, str) and model != "test")
+    kb_emb = (Embeddings(settings.embedding_model, router.budget) if real_model
+              else Embeddings("hashing", router.budget, embed_fn=hashing_embed))
+    kb = KnowledgeBase(ledger, kb_emb, kb_dir, floor=settings.kb_floor) if kb_dir else None
+    if kb:
+        await kb.index()
+        router.toolset = lookup_toolset(kb) if kb.count() else None
     estimate = router.budget.estimate_for(router.primary_model) * len(items)
     if router.budget.remaining() < 1.5 * estimate:
         raise SystemExit(f"not enough budget: need ~{estimate:.3f} USD x1.5, remaining {router.budget.remaining():.3f} USD")
@@ -358,7 +379,6 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
     mem_file = Path(tempfile.gettempdir()) / f"lens-eval-memory-{os.getpid()}.db"
     if mem_file.exists():
         mem_file.unlink()
-    real_model = model is None or (isinstance(model, str) and model != "test")
     emb = (Embeddings(settings.embedding_model, router.budget) if real_model
            else Embeddings("hashing", router.budget, embed_fn=hashing_embed))
     memory = Memory(mem_file, emb if settings.memory else None, threshold=settings.memory_threshold, min_gap_s=0)
@@ -381,7 +401,8 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
                                   entity_ids=[r.id if r else None for r in refs]))
         print(f"  {item.id:<24} recall {scores[-1].recall:.2f}  missed {scores[-1].missed}  "
               f"{routed.latency_ms} ms  ${routed.cost_usd:.4f}{'  escalated' if routed.escalated else ''}"
-              f"{'  links ' + str(scores[-1].entity_links) if scores[-1].entity_links else ''}", file=sys.stderr)
+              f"{'  links ' + str(scores[-1].entity_links) if scores[-1].entity_links else ''}"
+              f"{'  sources ' + str(scores[-1].sources) if scores[-1].sources else ''}", file=sys.stderr)
     try:
         mem_file.unlink(missing_ok=True)
     except OSError:
@@ -443,7 +464,7 @@ async def bootstrap(*, photos: Path | None = None, set_path: Path = DEFAULT_SET,
 
 def compare(a: dict, b: dict) -> str:
     """Side-by-side summary metrics with deltas, as text."""
-    keys = ["mean_recall", "forbid_hit_rate", "iou_mean", "answer_accuracy", "identity_rate", "identity_recall",
+    keys = ["mean_recall", "forbid_hit_rate", "iou_mean", "answer_accuracy", "source_accuracy", "identity_rate", "identity_recall",
             "identity_precision", "escalation_rate", "mean_cost_usd", "latency_p50_ms", "latency_p95_ms"]
     sa, sb = a["summary"], b["summary"]
     lines = [f"{'metric':<18}{'A':>12}{'B':>12}{'delta':>12}",
@@ -469,6 +490,7 @@ def _print_summary(report: dict) -> None:
           f"answers {s['answer_accuracy'] if s['answer_accuracy'] is not None else '-'}  "
           f"escalated {s['escalation_rate']:.3f}  cost ${s['mean_cost_usd']:.4f}/photo (${s['total_cost_usd']:.4f})  "
           f"latency p50 {s['latency_p50_ms']} ms p95 {s['latency_p95_ms']} ms  errors {s['errors']}")
+    print(f"kb: {s['lookups']} answers cited notes, source accuracy {s['source_accuracy'] if s['source_accuracy'] is not None else '-'}")
     print(f"identity rate {s['identity_rate'] if s['identity_rate'] is not None else '-'}  "
           f"identity recall {s['identity_recall'] if s['identity_recall'] is not None else '-'}  "
           f"identity precision {s['identity_precision'] if s['identity_precision'] is not None else '-'}  "
@@ -489,6 +511,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--model", default=None, help="model string, or 'test' for the offline fake")
     r.add_argument("--limit", type=int, default=None)
     r.add_argument("--tag", default="")
+    r.add_argument("--kb", type=Path, default=DEFAULT_KB, help="notes folder for the lookup tool ('' = none)")
     b = sub.add_parser("bootstrap", help="draft labels for photos not in the set")
     b.add_argument("--photos", type=Path, default=None)
     b.add_argument("--set", type=Path, default=DEFAULT_SET)
@@ -499,7 +522,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.cmd == "run":
-        report = asyncio.run(run(set_path=args.set, photos=args.photos, model=args.model, limit=args.limit, tag=args.tag))
+        report = asyncio.run(run(set_path=args.set, photos=args.photos, model=args.model, limit=args.limit, tag=args.tag,
+                                 kb_dir=args.kb if str(args.kb) else None))
         _print_summary(report)
     elif args.cmd == "bootstrap":
         new = asyncio.run(bootstrap(photos=args.photos, set_path=args.set, model=args.model))

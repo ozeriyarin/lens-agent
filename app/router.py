@@ -32,6 +32,8 @@ from app.schema import ScanResult
 
 log = logging.getLogger(__name__)
 
+TOOL_ESTIMATE_FACTOR = 2.0  # a lookup round trip roughly doubles a scan's tokens
+
 
 @dataclass(frozen=True)
 class Routed:
@@ -83,12 +85,15 @@ class Router:
         return self.escalation is not None
 
     async def _paid_call(self, agent: Agent[None, ScanResult], model: str, frame: PreparedFrame,
-                         question: str | None, tier: str, source: str, context: str | None = None):
+                         question: str | None, tier: str, source: str, context: str | None = None,
+                         private: bool = True):
         """reserve -> scan -> settle, returning (outcome, ledger entry). Raises on any failure
         after marking the reservation failed; raises BudgetExceeded before any call."""
-        request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier, source=source)
+        tools = self.toolset if (source == "tap" and question and question.strip() and private) else None
+        # A tool-enabled run may do an extra round trip carrying passages: reserve for it (005).
+        estimate = self.budget.estimate_for(model) * (TOOL_ESTIMATE_FACTOR if tools else 1.0)
+        request_id = self.budget.reserve(model, estimate, tier=tier, source=source)
         started = time.perf_counter()
-        tools = self.toolset if (source == "tap" and question and question.strip()) else None
         try:
             outcome = await scan(agent, frame, question, brief=(source == "live"), context=context, toolset=tools)
         except AgentFailed as e:
@@ -107,10 +112,14 @@ class Router:
         return outcome, entry
 
     async def run(self, frame: PreparedFrame, question: str | None = None, source: str = "tap",
-                  context: str | None = None) -> Routed:
+                  context: str | None = None, private: bool = True) -> Routed:
         """`context` (feature 004) is memory's summary of recently seen entities; it only
-        reaches the model together with a question."""
-        outcome, entry = await self._paid_call(self.primary, self.primary_model, frame, question, "primary", source, context)
+        reaches the model together with a question. `private=False` (caller failed the
+        local-or-token check) withholds the lookup tool: notes are the owner's data."""
+        if not private:
+            context = None
+        outcome, entry = await self._paid_call(self.primary, self.primary_model, frame, question, "primary", source,
+                                               context, private)
         routed = Routed(
             result=outcome.result,
             model=self.primary_model,
@@ -125,7 +134,7 @@ class Router:
 
         try:
             outcome2, entry2 = await self._paid_call(
-                self.escalation, self.escalation_model, frame, question, "escalation", source, context  # type: ignore[arg-type]
+                self.escalation, self.escalation_model, frame, question, "escalation", source, context, private  # type: ignore[arg-type]
             )
         except BudgetExceeded as e:
             log.info("escalation skipped, budget: %s", e)
