@@ -8,9 +8,10 @@ label, category, position, confidence, optional bounding box, and for people an
 on the right card.
 
 A portfolio AI-engineering project built spec-first with
-[GitHub Spec Kit](https://github.com/github/spec-kit): agents, structured outputs,
-cost control, and later memory, RAG and evals. See [CLAUDE.md](CLAUDE.md) for the
-roadmap and [specs/001-scan-frame](specs/001-scan-frame/) for the first feature.
+[GitHub Spec Kit](https://github.com/github/spec-kit): typed outputs, cost control, routing,
+live mode with an on-device detector, entity memory, RAG lookup, evals, Docker and CI.
+**Start with [docs/decisions.md](docs/decisions.md)**: the decisions, with the numbers.
+[CLAUDE.md](CLAUDE.md) has the roadmap; each feature lives under [specs/](specs/).
 
 ## How it works
 
