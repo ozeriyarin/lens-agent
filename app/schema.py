@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Category = Literal[
     "person",
@@ -93,7 +93,7 @@ class PersonDetails(BaseModel):
 
 
 class DetectedObject(BaseModel):
-    label: str = Field(min_length=1, max_length=60, description="Short name, e.g. 'coffee mug'")
+    label: str = Field(min_length=1, description="Short name, e.g. 'coffee mug'")
     category: Category
     position: Position = "unknown"
     confidence: float = Field(ge=0, le=1, description="How sure the model is that this object is present")
@@ -115,11 +115,22 @@ class DetectedObject(BaseModel):
     # and matched against remembered entities. Never for people (constitution IV).
     identity: str | None = Field(
         default=None,
-        max_length=160,
         description="Distinguishing details of this specific object: colour, material, brand, pattern, "
                     "visible text, damage. E.g. 'white ceramic mug, blue rim, chipped handle'. "
                     "Omit for people.",
     )
+
+    # Length caps on free text are for the UI, not correctness: a long label or identity is
+    # cut, never rejected. (Rejecting cost whole scans: the model rephrased and stayed long.)
+    @field_validator("label", mode="before")
+    @classmethod
+    def _cap_label(cls, v: object) -> object:
+        return v.strip()[:60] if isinstance(v, str) else v
+
+    @field_validator("identity", mode="before")
+    @classmethod
+    def _cap_identity(cls, v: object) -> object:
+        return v.strip()[:160] if isinstance(v, str) else v
 
     @model_validator(mode="after")
     def _person_details_only_for_people(self) -> DetectedObject:
@@ -154,12 +165,17 @@ class ScanResult(BaseModel):
     """What the agent returns for one frame. An empty list means 'nothing identifiable'."""
 
     objects: list[DetectedObject] = Field(default_factory=list)
-    scene: str = Field(max_length=200, description="One-sentence description of the scene")
+    scene: str = Field(description="One-sentence description of the scene, under 200 characters")
     answer: str | None = Field(default=None, description="Answer to the user's question when it is about the whole scene")
     sources: list[Source] = Field(
         default_factory=list,
         description="Passages from the owner's notes (via lookup) that the answer relies on; empty when none",
     )
+
+    @field_validator("scene", mode="before")
+    @classmethod
+    def _cap_scene(cls, v: object) -> object:
+        return v.strip()[:200] if isinstance(v, str) else v
 
     @property
     def is_empty(self) -> bool:

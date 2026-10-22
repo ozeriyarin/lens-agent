@@ -111,8 +111,13 @@ def test_identity_is_kept_for_objects_and_dropped_for_people():
     assert mug.identity == "white ceramic mug, blue rim"
     person = DetectedObject(label="man", category="person", confidence=0.9, identity="tall man in a red coat")
     assert person.identity is None  # people are never remembered as identities
-    with pytest.raises(ValidationError):
-        DetectedObject(label="mug", category="other", confidence=0.9, identity="x" * 161)
+    long = DetectedObject(label="m" * 100, category="other", confidence=0.9, identity="x" * 500)
+    assert len(long.label) == 60 and len(long.identity) == 160  # cut, not rejected
+
+
+def test_long_scene_is_cut_not_rejected():
+    r = ScanResult(scene="s" * 400, objects=[])
+    assert len(r.scene) == 200
 
 
 def test_scan_response_entities_align_with_objects():
