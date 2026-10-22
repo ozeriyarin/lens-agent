@@ -143,12 +143,23 @@ class DetectedObject(BaseModel):
         return self
 
 
+class Source(BaseModel):
+    """A note passage the answer relied on (feature 005). Only ever values returned by `lookup`."""
+
+    file: str = Field(max_length=200)
+    heading: str = Field(max_length=200)
+
+
 class ScanResult(BaseModel):
     """What the agent returns for one frame. An empty list means 'nothing identifiable'."""
 
     objects: list[DetectedObject] = Field(default_factory=list)
     scene: str = Field(max_length=200, description="One-sentence description of the scene")
     answer: str | None = Field(default=None, description="Answer to the user's question when it is about the whole scene")
+    sources: list[Source] = Field(
+        default_factory=list,
+        description="Passages from the owner's notes (via lookup) that the answer relies on; empty when none",
+    )
 
     @property
     def is_empty(self) -> bool:

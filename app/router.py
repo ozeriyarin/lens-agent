@@ -23,6 +23,7 @@ import time
 from dataclasses import dataclass
 
 from pydantic_ai import Agent
+from pydantic_ai.toolsets import AbstractToolset
 
 from app.agent import AgentFailed, scan
 from app.budget import Budget, BudgetExceeded
@@ -67,6 +68,7 @@ class Router:
         escalation: Agent[None, ScanResult] | None = None,
         escalation_model: str = "",
         escalate_below: float = 0.6,
+        toolset: AbstractToolset | None = None,
     ) -> None:
         self.budget = budget
         self.primary = primary
@@ -74,6 +76,7 @@ class Router:
         self.escalation = escalation if escalation_model else None
         self.escalation_model = escalation_model
         self.escalate_below = escalate_below
+        self.toolset = toolset  # 005: the lookup tool; offered only on tap scans with a question
 
     @property
     def enabled(self) -> bool:
@@ -85,8 +88,9 @@ class Router:
         after marking the reservation failed; raises BudgetExceeded before any call."""
         request_id = self.budget.reserve(model, self.budget.estimate_for(model), tier=tier, source=source)
         started = time.perf_counter()
+        tools = self.toolset if (source == "tap" and question and question.strip()) else None
         try:
-            outcome = await scan(agent, frame, question, brief=(source == "live"), context=context)
+            outcome = await scan(agent, frame, question, brief=(source == "live"), context=context, toolset=tools)
         except AgentFailed as e:
             self.budget.fail(request_id, input_tokens=e.input_tokens, output_tokens=e.output_tokens,
                              latency_ms=int((time.perf_counter() - started) * 1000))
