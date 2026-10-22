@@ -130,7 +130,14 @@ const MAX_UPLOAD_SIDE = 1280;
               movement has stopped. We only send when both hold, so panning or a trembling hand
               never triggers a scan; arriving at a new view and holding it does. */
 const SENSITIVITY = { low: 16, medium: 10, high: 6 };   // CHANGED threshold, mean abs diff 0..255
-const STILL_THRESHOLD = 4;                              // STILL threshold between consecutive ticks
+/* STILL is relative: a hand-held phone never gives two identical thumbnails (tremor, auto
+   exposure), so "still" means the frame-to-frame change is small compared with how much the
+   view has changed since the last send, with an absolute floor. And a view that keeps
+   changing but never settles is sent after MAX_WAIT_TICKS anyway (phone logs 2026-10-22:
+   only 7 frames in 6 minutes while panning between views). */
+const STILL_THRESHOLD = 6;                              // absolute floor, mean abs diff 0..255
+const STILL_RATIO = 0.35;                               // still if diff(prev) < STILL_RATIO * diff(lastSent)
+const MAX_WAIT_TICKS = 3;                               // changed-but-never-still: send on the 3rd tick
 const THUMB_W = 16, THUMB_H = 12;
 /* A change *inside* a tracked box (a smile inside a face box, a hand picking up the mug)
    is tiny for the whole-frame thumbnail, so each tracked box is also compared on its own,
@@ -598,12 +605,12 @@ againBtn.addEventListener('click', () => {
 
 /* --- live mode (003 FR-1, FR-3, FR-6) ---------------------------------------------------------- */
 const live = {
-  on: false, timer: null, inFlight: false, lastSent: null, lastSentFine: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0, lastSentAt: 0,
+  on: false, timer: null, inFlight: false, lastSent: null, lastSentFine: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0, lastSentAt: 0, waiting: 0,
   spent: 0, charges: [],   // [{t, cost}] for the per-minute projection
   perMinute() { const cut = Date.now() - 60000; return this.charges.filter((c) => c.t > cut).reduce((a, c) => a + c.cost, 0); },
   start() {
     if (this.on) return;
-    this.on = true; this.lastSent = null; this.lastSentFine = null; this.prevThumb = null; this.sent = 0; this.skipped = 0;
+    this.on = true; this.lastSent = null; this.lastSentFine = null; this.prevThumb = null; this.sent = 0; this.skipped = 0; this.waiting = 0;
     shot.style.display = 'none'; againBtn.hidden = true; results.innerHTML = '';
     const [w, h] = sourceSize(); fitStageTo(w, h);
     liveBtn.classList.add('on'); liveBtn.textContent = 'Stop'; stage.classList.add('live');
@@ -625,9 +632,13 @@ const live = {
     let thumb;
     try { thumb = thumbnail(); } catch { return; }
     const prev = this.prevThumb; this.prevThumb = thumb;
-    const still = !prev || meanAbsDiff(thumb, prev) < STILL_THRESHOLD;
     const sens = SENSITIVITY[$('sensitivity').value];
-    let changed = !this.lastSent || meanAbsDiff(thumb, this.lastSent) >= sens;
+    const dPrev = prev ? meanAbsDiff(thumb, prev) : 0;
+    const dSent = this.lastSent ? meanAbsDiff(thumb, this.lastSent) : Infinity;
+    let changed = !this.lastSent || dSent >= sens;
+    let still = !prev || dPrev < Math.max(STILL_THRESHOLD, STILL_RATIO * (isFinite(dSent) ? dSent : 0));
+    if (changed && !still) { this.waiting++; if (this.waiting >= MAX_WAIT_TICKS) still = true; }  // never settles: send anyway
+    else this.waiting = 0;
     let fine = null;
     if (!changed && this.lastSentFine && tracker.items.length) {
       // Whole frame unchanged: did anything change inside a tracked box (a smile, a hand)?
@@ -643,9 +654,11 @@ const live = {
     if (!changed && personInFrame && this.lastSentAt && Date.now() - this.lastSentAt > PERSON_REFRESH_MS) changed = true;
     if (!changed || !still) {
       this.skipped++;
-      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${still ? (personInFrame ? 'unchanged · face refresh every 6 s' : 'view unchanged, waiting') : 'moving…'}`);
+      const why = !changed ? (personInFrame ? 'unchanged · face refresh every 6 s' : 'view unchanged') : `moving… (${this.waiting}/${MAX_WAIT_TICKS})`;
+      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${why} · Δsent ${isFinite(dSent) ? dSent.toFixed(0) : '-'} Δprev ${dPrev.toFixed(0)} (sens ${sens})`);
       return;
     }
+    this.waiting = 0;
     this.inFlight = true;
     try {
       const blob = await captureJpeg(false);

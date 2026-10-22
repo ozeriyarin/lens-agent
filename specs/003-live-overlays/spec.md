@@ -86,6 +86,11 @@ per minute at the current send rate. Toggling Live off clears the overlay.
   the person box usually spans the frame, so neither the global nor the in-box rule sees a smile.
 - FR-18 **Tracker drift cap.** A tracked box that moves more than a quarter of the frame from where
   the model placed it is dropped (template matching wanders on blurry faces).
+- FR-19 **Stillness is relative.** A hand-held phone never yields identical consecutive frames, so
+  "still" means the frame-to-frame change is below max(6, 0.35 x the change since the last send);
+  a changed view that never settles is sent on the third tick. (Phone logs 2026-10-22: 7 frames in
+  6 minutes while panning, because the absolute stillness rule never passed.) The status line shows
+  both change numbers for tuning.
 - FR-13 **Fast scans.** Model "thinking" is off for scans and live frames ask for brief output
   (<= 6 objects, short scene): measured on the phone 2.1-2.8 s per frame instead of 4-13 s.
 
