@@ -4,4 +4,4 @@
 - [x] T2 Fusion: COCO→category map; on each scan result attach Gemini objects to tracks by IoU ≥ 0.3; overlay draws tracks (Gemini text where attached, class name otherwise); unmatched objects keep the template tracker
 - [x] T3 Trigger: class-set change held for 2 ticks sends a frame; status says why
 - [x] T4 Pane check with a real photo drawn into the source canvas; spec 003 pointer; README live-mode paragraph
-- [ ] T5 Phone check; close the spec
+- [x] T5 Phone check; close the spec

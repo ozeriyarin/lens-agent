@@ -1,6 +1,6 @@
 # Feature 003b: Local detector — boxes from the phone, meaning from the model
 
-**Status**: Built (2026-10-22; pane check passed: bottle detected at Gemini's position, Gemini object attached, 7-9 fps; phone check pending) | **Created**: 2026-10-22
+**Status**: Done (2026-10-22; phone check passed on the WebAssembly backend) | **Created**: 2026-10-22
 
 ## Why
 Live mode (003) draws boxes from the last cloud result and slides them with a template

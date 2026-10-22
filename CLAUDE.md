@@ -31,7 +31,7 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 - **001 scan-frame** — tap to scan, typed objects, dedupe gate, budget guard, cost log. *(done 2026-10-21)*
 - **002 smart-routing** — Gemini first, escalate to Haiku on weak results or unanswered questions; calibrated estimates from the ledger; per-model stats + panel in the page; provider spend limits documented. *(done 2026-10-21)*
 - **003 live-overlays** — live loop with changed-and-still gate, data drawn on the frame, template tracking between results, flip, zoom. *(done 2026-10-21)*
-- 003b (deferred) in-browser detector for 10-15 fps boxes, if live tracking still feels laggy
+- **003b local-detector** — on-device COCO-SSD (TensorFlow.js, WebAssembly backend) supplies box positions between cloud results, fused with Gemini objects by IoU; class-set changes trigger scans. *(done 2026-10-22)*
 
 Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RAG → 007 Docker/CI/observability → 008 Pi. All but 008 done by 2026-10-22.
 - **004 entity-memory** — identity per object, text embeddings under the budget, SQLite entity store with cosine linking, known badges, memory panel, identity metrics in evals. *(done 2026-10-22)*
