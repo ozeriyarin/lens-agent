@@ -91,6 +91,8 @@ per minute at the current send rate. Toggling Live off clears the overlay.
   a changed view that never settles is sent on the third tick. (Phone logs 2026-10-22: 7 frames in
   6 minutes while panning, because the absolute stillness rule never passed.) The status line shows
   both change numbers for tuning.
+- See also feature 003b (`specs/003b-local-detector/`): an on-device detector supplies box
+  positions between cloud results; the template tracker remains the fallback.
 - FR-13 **Fast scans.** Model "thinking" is off for scans and live frames ask for brief output
   (<= 6 objects, short scene): measured on the phone 2.1-2.8 s per frame instead of 4-13 s.
 

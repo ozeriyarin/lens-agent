@@ -135,7 +135,14 @@ below `MOTION_THRESHOLD` (6/255) the frame is skipped for free. Frames that do g
 flight. Results are drawn on the video: a box per object with label and confidence, mood and
 age estimates on people, objects without a box in a strip, the scene sentence and any answer
 along the bottom. The header shows live spend and a per-minute projection; a 401 or 402 stops
-live mode with the reason. Nothing is recorded or stored: each frame lives in memory for one
+live mode with the reason.
+
+Between cloud results, **local boxes** (feature 003b) keep the picture honest: a small COCO-SSD
+detector (TensorFlow.js, loaded from a CDN on the first Live start, ~6 MB, cached) runs on the
+phone's GPU at up to 8 fps. Its boxes drive positions; each Gemini object attaches to the matching
+local box and follows it; objects the detector has no class for use the template tracker; detections
+Gemini has not described yet show a thin grey box with the detector's class. A class appearing or
+disappearing triggers a scan. Nothing leaves the phone; `cloud boxes only` turns it off. Nothing is recorded or stored: each frame lives in memory for one
 request.
 
 ## Memory (feature 004)

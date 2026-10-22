@@ -103,6 +103,9 @@
       <option value="low">low sens.</option><option value="medium" selected>medium sens.</option><option value="high">high sens.</option>
     </select>
     <button id="flipBtn" type="button" class="secondary" disabled title="switch between rear and front camera">Flip</button>
+    <select id="localBoxes" title="boxes from the on-device detector (003b): follow objects at several fps, no cost">
+      <option value="on" selected>local boxes</option><option value="off">cloud boxes only</option>
+    </select>
     <button id="againBtn" type="button" class="secondary" hidden>Again</button>
   </form>
   <div id="status">Starting camera…</div>
@@ -332,7 +335,7 @@ async function postScan(blob, question, live) {
 
 /* --- overlay renderer (003 FR-4, FR-5) ---------------------------------------------------- */
 let lastResponse = null, lastDrawnAt = 0;
-function drawOverlay(resp, stale = false, tracked = null) {
+function drawOverlay(resp, stale = false, tracked = null, locals = null) {
   const W = overlay.width, H = overlay.height;
   const g = overlay.getContext('2d');
   g.clearRect(0, 0, W, H);
@@ -379,6 +382,13 @@ function drawOverlay(resp, stale = false, tracked = null) {
     label(lines, x, y - block < 0 ? y + g.lineWidth : y - block, color);   // above the box, or inside when at the top edge
   });
   if (unboxed.length) label(['no box: ' + unboxed.join(', ')], base * 0.5, base * 0.5, '#e8eaf0');
+  // Local detections nobody has described yet: thin, dim, with the detector's own class (003b FR-2).
+  if (locals && locals.length) {
+    g.save(); g.globalAlpha = 0.6; g.lineWidth = Math.max(1, base / 10); g.strokeStyle = '#9aa0b0';
+    g.font = `500 ${base * 0.8}px system-ui, sans-serif`;
+    for (const t of locals) { g.strokeRect(t.x * W, t.y * H, t.w * W, t.h * H); label([`${t.cls} · ${Math.round(t.score * 100)}%`], t.x * W, t.y * H + t.h * H - base * 1.2, '#9aa0b0'); }
+    g.restore();
+  }
 
   // Bottom line: scene sentence (+ answer), wrapped to at most two lines.
   const bottom = [r.scene, r.answer ? `→ ${r.answer}` : ''].filter(Boolean).join('  ');
@@ -438,8 +448,115 @@ function showResponse(resp) {
   lastResponse = resp; lastDrawnAt = Date.now();
   drawOverlay(resp);
   renderCards(resp);
-  if (live.on) tracker.arm(resp, shot);   // shot holds the exact frame the boxes refer to
+  if (live.on) { tracker.arm(resp, shot); detector.fuse(resp); }   // shot holds the exact frame the boxes refer to
 }
+
+/* --- local detector (003b) --------------------------------------------------------------------------
+   COCO-SSD (TensorFlow.js) runs on the phone's GPU and gives boxes several times a second for free;
+   Gemini keeps the meaning (label, identity, mood, memory, notes). Detections are tracked tick to tick
+   by IoU so Gemini data attached to a box stays with it; a change in the set of visible classes is a
+   reason to send a frame. Loaded only when Live starts; if it fails, 003 behaviour (template tracker). */
+const DETECTOR_SCRIPTS = [
+  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
+  'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+];
+const DET_FPS = 8, DET_SIDE = 320, DET_SCORE = 0.5, DET_MAX = 12, DET_STALE_MS = 1500, DET_MATCH_IOU = 0.4, FUSE_IOU = 0.3;
+const COCO_CAT = {   // COCO class -> our category (anything missing -> 'other')
+  person: 'person', cat: 'animal', dog: 'animal', bird: 'animal', horse: 'animal', sheep: 'animal', cow: 'animal',
+  bottle: 'food', 'wine glass': 'other', cup: 'other', bowl: 'food', banana: 'food', apple: 'food', orange: 'food',
+  sandwich: 'food', pizza: 'food', donut: 'food', cake: 'food', broccoli: 'food', carrot: 'food', 'hot dog': 'food',
+  laptop: 'electronics', 'cell phone': 'electronics', tv: 'electronics', keyboard: 'electronics', mouse: 'electronics',
+  remote: 'electronics', microwave: 'electronics', oven: 'electronics', toaster: 'electronics', refrigerator: 'furniture',
+  chair: 'furniture', couch: 'furniture', bed: 'furniture', 'dining table': 'furniture', toilet: 'furniture', sink: 'furniture',
+  'potted plant': 'plant', book: 'other', clock: 'other', vase: 'other', scissors: 'tool', knife: 'tool', fork: 'tool', spoon: 'tool',
+  car: 'vehicle', bicycle: 'vehicle', motorcycle: 'vehicle', bus: 'vehicle', truck: 'vehicle', backpack: 'other', handbag: 'other',
+};
+function iouBox(a, b) {
+  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const inter = ix * iy, union = a.w * a.h + b.w * b.h - inter;
+  return union > 0 ? inter / union : 0;
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => { const el = document.createElement('script'); el.src = src; el.onload = resolve; el.onerror = () => reject(new Error(`failed to load ${src}`)); document.head.appendChild(el); });
+}
+const detector = {
+  model: null, loading: false, failed: false, timer: null, busy: false, fps: 0, tracks: [], nextId: 1,
+  lastClasses: null, classTicks: 0, changed: false, work: document.createElement('canvas'), frames: 0, fpsAt: 0,
+  get enabled() { return $('localBoxes').value === 'on' && !this.failed; },
+  async load() {
+    if (this.model || this.loading || this.failed) return;
+    this.loading = true;
+    try {
+      if (!window.cocoSsd) for (const src of DETECTOR_SCRIPTS) await loadScript(src);
+      this.model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+      setStatus('Local boxes ready.');
+    } catch (err) {
+      this.failed = true;
+      setStatus(`Local boxes off (${err.message.slice(0, 60)}); cloud boxes + tracker instead.`);
+    }
+    this.loading = false;
+  },
+  start() { if (!this.enabled) return; this.load(); this.tracks = []; this.lastClasses = null; if (!this.timer) this.timer = setInterval(() => this.tick(), 1000 / DET_FPS); },
+  stop() { clearInterval(this.timer); this.timer = null; this.tracks = []; this.busy = false; },
+  async tick() {
+    if (!this.model || this.busy || document.hidden || !live.on || !this.enabled) return;
+    this.busy = true;
+    try {
+      const [sx, sy, sw, sh] = cropRect(); if (!sw) return;
+      const scale = Math.min(1, DET_SIDE / Math.max(sw, sh));
+      const w = this.work, W = Math.round(sw * scale), H = Math.round(sh * scale);
+      if (w.width !== W || w.height !== H) { w.width = W; w.height = H; }
+      w.getContext('2d').drawImage(frameSource, sx, sy, sw, sh, 0, 0, W, H);
+      const preds = await this.model.detect(w, DET_MAX, DET_SCORE);
+      this.update(preds.map((p) => ({ cls: p.class, score: p.score, x: p.bbox[0] / W, y: p.bbox[1] / H, w: p.bbox[2] / W, h: p.bbox[3] / H })));
+      this.frames++; const now = performance.now();
+      if (now - this.fpsAt > 1000) { this.fps = Math.round(this.frames * 1000 / (now - (this.fpsAt || now - 1000))); this.frames = 0; this.fpsAt = now; }
+    } catch (err) { setStatus(`Local boxes error: ${err.message.slice(0, 60)}`, true); this.failed = true; }
+    finally { this.busy = false; }
+  },
+  update(dets) {
+    const now = Date.now();
+    for (const t of this.tracks) t.matched = false;
+    for (const d of dets.sort((a, b) => b.score - a.score)) {   // FR-4: greedy IoU to existing tracks
+      let best = null, bestIou = DET_MATCH_IOU;
+      for (const t of this.tracks) if (!t.matched && t.cls === d.cls) { const i = iouBox(t, d); if (i >= bestIou) { best = t; bestIou = i; } }
+      if (best) Object.assign(best, { x: d.x, y: d.y, w: d.w, h: d.h, score: d.score, lastSeen: now, matched: true });
+      else this.tracks.push({ id: this.nextId++, cls: d.cls, score: d.score, x: d.x, y: d.y, w: d.w, h: d.h, lastSeen: now, matched: true, attached: null });
+    }
+    this.tracks = this.tracks.filter((t) => now - t.lastSeen <= DET_STALE_MS);
+    const classes = [...new Set(dets.map((d) => d.cls))].sort().join(',');   // FR-5: class-set change, 2 ticks
+    if (this.lastClasses === null) this.lastClasses = classes;
+    else if (classes !== this.lastClasses) { if (++this.classTicks >= 2) { this.lastClasses = classes; this.classTicks = 0; this.changed = true; } }
+    else this.classTicks = 0;
+    if (lastResponse) drawOverlay(lastResponse, Date.now() - lastDrawnAt > STALE_MS, this.trackedMap(), this.locals());
+    else drawOverlay({ result: { objects: [], scene: '', answer: null, sources: [] } }, false, null, this.locals());
+  },
+  fuse(resp) {   // FR-3: Gemini objects -> local tracks
+    for (const t of this.tracks) t.attached = null;
+    const used = new Set();
+    for (const o of resp.result.objects) {
+      if (!o.bbox) continue;
+      let best = null, bestIou = FUSE_IOU;
+      for (const t of this.tracks) {
+        if (used.has(t.id)) continue;
+        const cat = COCO_CAT[t.cls] || 'other';
+        if (!(o.category === 'other' || cat === 'other' || cat === o.category)) continue;
+        const i = iouBox(t, o.bbox); if (i >= bestIou) { best = t; bestIou = i; }
+      }
+      if (best) { best.attached = o; used.add(best.id); }
+    }
+  },
+  trackedMap() {   // positions for Gemini objects: attached track if any, else the template tracker's
+    const m = new Map();
+    if (tracker.items.length) { const sw = tracker.sw, sh = tracker.sh; for (const it of tracker.items) m.set(it.o, it.lost ? null : { x: it.x / sw, y: it.y / sh, w: it.w / sw, h: it.h / sh }); }
+    for (const t of this.tracks) if (t.attached) m.set(t.attached, { x: t.x, y: t.y, w: t.w, h: t.h });
+    return m;
+  },
+  locals() { return this.tracks.filter((t) => !t.attached); },
+  active() { return !!(this.model && this.timer && this.enabled); },
+};
+$('localBoxes').addEventListener('change', () => { if (live.on) { if (detector.enabled) detector.start(); else { detector.stop(); drawOverlay(lastResponse); } } });
 
 /* --- tracker ---------------------------------------------------------------------------------- */
 const tracker = {
@@ -615,6 +732,7 @@ const live = {
     const [w, h] = sourceSize(); fitStageTo(w, h);
     liveBtn.classList.add('on'); liveBtn.textContent = 'Stop'; stage.classList.add('live');
     this.timer = setInterval(() => this.tick(), intervalMs());
+    detector.start();
     setStatus('Live: sending a frame only when the scene changes.');
     renderHeader();
     this.tick();
@@ -622,6 +740,7 @@ const live = {
   stop(msg, bad = false) {
     if (!this.on) return;
     this.on = false; clearInterval(this.timer); this.timer = null;
+    detector.stop();
     liveBtn.classList.remove('on'); liveBtn.textContent = 'Live'; stage.classList.remove('live');
     drawOverlay(null);   // boxes belong to a frame that is no longer on screen
     setStatus(msg || `Live mode off. ${this.sent} frames sent, ${this.skipped} skipped as unchanged.`, bad);
@@ -652,10 +771,14 @@ const live = {
     // A person in the last result: refresh on a timer so expressions are followed.
     const personInFrame = lastResponse && lastResponse.result.objects.some((o) => o.category === 'person');
     if (!changed && personInFrame && this.lastSentAt && Date.now() - this.lastSentAt > PERSON_REFRESH_MS) changed = true;
+    // 003b FR-5: the local detector saw a class appear or disappear: that is a changed view, send now.
+    let viaDetector = false;
+    if (detector.changed) { detector.changed = false; if (!changed || !still) { changed = true; still = true; viaDetector = true; } }
     if (!changed || !still) {
       this.skipped++;
       const why = !changed ? (personInFrame ? 'unchanged · face refresh every 6 s' : 'view unchanged') : `moving… (${this.waiting}/${MAX_WAIT_TICKS})`;
-      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${why} · Δsent ${isFinite(dSent) ? dSent.toFixed(0) : '-'} Δprev ${dPrev.toFixed(0)} (sens ${sens})`);
+      const det = detector.active() ? ` · local ${detector.tracks.length} boxes @${detector.fps} fps` : '';
+      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${why} · Δsent ${isFinite(dSent) ? dSent.toFixed(0) : '-'} Δprev ${dPrev.toFixed(0)} (sens ${sens})${det}`);
       return;
     }
     this.waiting = 0;
@@ -667,7 +790,7 @@ const live = {
       this.lastEmptyAt = resp.result.objects.length ? 0 : Date.now();
       if (!resp.cached) { this.spent += resp.cost_usd; this.charges.push({ t: Date.now(), cost: resp.cost_usd }); }
       showResponse(resp);
-      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · last ${resp.cached ? 'cached' : fmtUsd(resp.cost_usd) + ' · ' + resp.latency_ms + ' ms'}${resp.escalated ? ' · escalated' : ''}`);
+      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · last ${resp.cached ? 'cached' : fmtUsd(resp.cost_usd) + ' · ' + resp.latency_ms + ' ms'}${resp.escalated ? ' · escalated' : ''}${viaDetector ? ' · new object seen' : ''}`);
       renderHeader();
       if (this.sent % 5 === 0) refreshStats();
     } catch (err) {
@@ -686,7 +809,7 @@ document.addEventListener('visibilitychange', () => { if (live.on) setStatus(doc
 /* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
 window.lens = {
   setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
-  live, drawOverlay, postScan, meanAbsDiff, thumbnail, fineThumbnail, regionDiff, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse, setZoom, zoomState, cropRect, renderEntities,
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, fineThumbnail, regionDiff, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, detector, iouBox, COCO_CAT, showResponse, setZoom, zoomState, cropRect, renderEntities,
 };
 
 startCamera();
