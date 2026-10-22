@@ -1,6 +1,6 @@
 # Feature 005: RAG lookup — the agent consults a knowledge base when a question needs facts
 
-**Status**: Draft | **Created**: 2026-10-22
+**Status**: Done (2026-10-22; phone check: grounded answer with source, 'no note found' for an unrelated question; eval source accuracy 3/3, recall 0.90) | **Created**: 2026-10-22
 
 ## Why
 Today a question is answered from the picture alone. "Is this plant healthy?" works; "how
@@ -55,6 +55,13 @@ The owner adds or edits a note; one command re-indexes; the next question uses i
   called with an entity's identity text to find notes about that specific object ("Dana's mug").
 - FR-7 **Evals.** The set gains questions whose answers live only in the KB (`kb/` sample notes
   committed for the eval), scored by `expect_answer_contains` plus a new `source_expected` check.
+
+## Changes during implementation (constitution VI)
+- Private-data rule: the lookup tool, memory context, entity linking and cached question answers
+  are only given to callers that pass the local-or-token check; others get a plain scan from a
+  separate cache. Tool-enabled scans reserve 2x the estimate.
+- Sample notes for the evals live in `eval/kb/` (committed); the owner's notes in `kb/` stay
+  gitignored. The eval runner indexes `eval/kb` by default (`--kb ''` to disable).
 
 ## Non-goals (this feature)
 Web search; large documents (PDF manuals: a later feature could add a PDF-to-Markdown step);

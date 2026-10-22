@@ -4,4 +4,4 @@
 - [x] T2 Tool: `lookup` registered on the agent for tap scans with a question; usage limits; `ScanResult.sources`; instructions for grounding; FunctionModel tests of call/no-call/empty
 - [x] T3 Wiring + page: kb in Services, sources under the answer card; API tests
 - [x] T4 Sample notes in `kb/` for evals + README; eval questions with `source_expected`; run and record
-- [ ] T5 Phone check (grounded + no-note answers); close the spec
+- [x] T5 Phone check (grounded + no-note answers); close the spec
