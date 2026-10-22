@@ -34,7 +34,7 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 - 003b (deferred) in-browser detector for 10-15 fps boxes, if live tracking still feels laggy
 
 Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RAG → 007 Docker/CI/observability → 008 Pi.
-- 004 entity memory — vector store of seen entities, "same mug as yesterday"
+- **004 entity-memory** — identity per object, text embeddings under the budget, SQLite entity store with cosine linking, known badges, memory panel, identity metrics in evals. *(done 2026-10-22)*
 - 005 RAG tool — `lookup(label)` over a small knowledge base
 - **006 evals** — labelled set (7 photos to start, bootstrap command to grow it), scorer, runner, compare; baseline recall 0.853. *(done 2026-10-21)*
 - 007 Docker Compose, CI, observability (traces, tokens, latency, cost)

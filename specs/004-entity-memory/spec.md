@@ -1,6 +1,6 @@
 # Feature 004: Entity memory — "the same mug as yesterday"
 
-**Status**: Draft | **Created**: 2026-10-21
+**Status**: Done (2026-10-22; phone check passed; eval identity recall 1.0 / precision 1.0 on 6 groups) | **Created**: 2026-10-21
 
 ## Why
 Today every scan is amnesic: the mug on the desk is a new mug every time. A vision *agent*
@@ -52,8 +52,10 @@ how often and when last seen, and a Forget button per entity (and Forget all).
   object gains `entity: {id, known: bool, sightings, first_seen, last_seen}`.
 - FR-5 **Rate.** Per entity, a new sighting is recorded only if the last one is older than 60 s.
 - FR-6 **Questions use memory.** When a question is present, the agent receives a compact
-  summary of the top linked entities ("mug: seen 12x since 2026-10-21, last on_table") as part
-  of the prompt for that scan, so "have you seen this before?" can be answered.
+  summary of entities seen in the last 5 minutes ("mug (white, blue rim): seen 12x since
+  2026-10-21, last on_table") inside a `<memory>` block declared as data, so "have you seen
+  this before?" can be answered. (Read before the scan: it describes the previous scans of the
+  same scene, which is what the question usually refers to.)
 - FR-7 **API.** `GET /entities` (list, newest last-seen first), `DELETE /entities/{id}`,
   `DELETE /entities` (all), token-guarded like the rest.
 - FR-8 **UI.** "known · seen N×" badge on cards and on the frame label; an Entities panel next

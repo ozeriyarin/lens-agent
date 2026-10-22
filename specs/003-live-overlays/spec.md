@@ -77,6 +77,10 @@ per minute at the current send rate. Toggling Live off clears the overlay.
   tracker alike, so boxes stay aligned with the zoomed preview. Works mid-live.
 - FR-15 **Small objects.** Live frames allow up to 10 objects and the instructions say that small
   handheld things (remote, phone, keys) count; the first phone test missed a remote.
+- FR-16 **Changes inside a box count.** Besides the whole-frame rule, each tracked box is compared
+  on a finer thumbnail against the last sent frame; a change inside it (a smile in a face box, a
+  hand on the mug) triggers a send even when the rest of the frame is unchanged. (Phone feedback:
+  switching from neutral to smiling did not refresh the mood estimate.)
 - FR-13 **Fast scans.** Model "thinking" is off for scans and live frames ask for brief output
   (<= 6 objects, short scene): measured on the phone 2.1-2.8 s per frame instead of 4-13 s.
 

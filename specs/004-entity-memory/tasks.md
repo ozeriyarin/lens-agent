@@ -6,4 +6,4 @@
 - [x] T4 Wiring: router/main call memory after the scan; `/entities` endpoints; `MEMORY=off`; tests
 - [x] T5 Page: known badge on cards and frame labels; Entities panel with Forget
 - [x] T6 Evals: identity presence metric; cross-photo link pairs in the set; run and record
-- [ ] T7 Manual check on the phone; README; close the spec
+- [x] T7 Manual check on the phone; README; close the spec

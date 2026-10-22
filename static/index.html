@@ -130,6 +130,12 @@ const MAX_UPLOAD_SIDE = 1280;
 const SENSITIVITY = { low: 16, medium: 10, high: 6 };   // CHANGED threshold, mean abs diff 0..255
 const STILL_THRESHOLD = 4;                              // STILL threshold between consecutive ticks
 const THUMB_W = 16, THUMB_H = 12;
+/* A change *inside* a tracked box (a smile inside a face box, a hand picking up the mug)
+   is tiny for the whole-frame thumbnail, so each tracked box is also compared on its own,
+   on a finer 64x48 thumbnail, against the frame that was last sent. Region threshold is
+   a fraction of the global one: the box is small, so noise averages out less. */
+const FINE_W = 64, FINE_H = 48;
+const REGION_FACTOR = 0.5;   // a change over ~10-15% of a box at full contrast scores ~15-20 here; medium sens -> 5
 const STALE_MS = 8000;            // overlay dims after this (003 FR-5); it is only replaced by the next result
 /* Tracker (003, "moving boxes"): between model results each box follows its object. On every
    result we remember a small grayscale crop of each box from the frame that was sent; a few
@@ -195,7 +201,7 @@ async function setZoom(z) {
     try { await video.srcObject.getVideoTracks()[0].applyConstraints({ advanced: [{ zoom: z }] }); } catch {}
   }
   applyPreviewTransform();
-  live.lastSent = null; live.prevThumb = null;   // framing changed: next still view is a new view
+  live.lastSent = null; live.lastSentFine = null; live.prevThumb = null;   // framing changed: next still view is a new view
   if (!live.on) { drawOverlay(null); }
 }
 $('zoom').addEventListener('input', (e) => setZoom(Number(e.target.value)));
@@ -240,7 +246,7 @@ async function flipCamera() {
   facing = facing === 'environment' ? 'user' : 'environment';
   $('flipBtn').disabled = true;
   await startCamera();          // works mid-live: the loop keeps reading from the same <video>
-  live.lastSent = null; live.prevThumb = null;   // new camera = new scene; the next still frame is sent
+  live.lastSent = null; live.lastSentFine = null; live.prevThumb = null;   // new camera = new scene; the next still frame is sent
   if (!live.on) { drawOverlay(null); shot.style.display = 'none'; againBtn.hidden = true; scanBtn.disabled = false; }
   $('flipBtn').disabled = false;
 }
@@ -268,13 +274,24 @@ function captureJpeg(freeze) {
 /* --- motion gate (003 FR-2) --------------------------------------------------------------- */
 const thumbCanvas = document.createElement('canvas');
 thumbCanvas.width = THUMB_W; thumbCanvas.height = THUMB_H;
-function thumbnail() {
-  const g = thumbCanvas.getContext('2d', { willReadFrequently: true });
-  drawSource(g, THUMB_W, THUMB_H);
-  const d = g.getImageData(0, 0, THUMB_W, THUMB_H).data;
-  const gray = new Uint8Array(THUMB_W * THUMB_H);
+function grayFrom(canvas, w, h) {
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  const g = canvas.getContext('2d', { willReadFrequently: true });
+  drawSource(g, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  const gray = new Uint8Array(w * h);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 77 + d[i + 1] * 151 + d[i + 2] * 28) >> 8;
   return gray;
+}
+function thumbnail() { return grayFrom(thumbCanvas, THUMB_W, THUMB_H); }
+const fineCanvas = document.createElement('canvas');
+function fineThumbnail() { return grayFrom(fineCanvas, FINE_W, FINE_H); }
+function regionDiff(a, b, box) {   // mean abs diff inside a normalized box on FINE_W x FINE_H grays
+  const x0 = Math.max(0, Math.floor(box.x * FINE_W)), y0 = Math.max(0, Math.floor(box.y * FINE_H));
+  const x1 = Math.min(FINE_W, Math.ceil((box.x + box.w) * FINE_W)), y1 = Math.min(FINE_H, Math.ceil((box.y + box.h) * FINE_H));
+  let sum = 0, n = 0;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { sum += Math.abs(a[y * FINE_W + x] - b[y * FINE_W + x]); n++; }
+  return n ? sum / n : 0;
 }
 function meanAbsDiff(a, b) {
   let s = 0;
@@ -567,12 +584,12 @@ againBtn.addEventListener('click', () => {
 
 /* --- live mode (003 FR-1, FR-3, FR-6) ---------------------------------------------------------- */
 const live = {
-  on: false, timer: null, inFlight: false, lastSent: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0,
+  on: false, timer: null, inFlight: false, lastSent: null, lastSentFine: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0,
   spent: 0, charges: [],   // [{t, cost}] for the per-minute projection
   perMinute() { const cut = Date.now() - 60000; return this.charges.filter((c) => c.t > cut).reduce((a, c) => a + c.cost, 0); },
   start() {
     if (this.on) return;
-    this.on = true; this.lastSent = null; this.prevThumb = null; this.sent = 0; this.skipped = 0;
+    this.on = true; this.lastSent = null; this.lastSentFine = null; this.prevThumb = null; this.sent = 0; this.skipped = 0;
     shot.style.display = 'none'; againBtn.hidden = true; results.innerHTML = '';
     const [w, h] = sourceSize(); fitStageTo(w, h);
     liveBtn.classList.add('on'); liveBtn.textContent = 'Stop'; stage.classList.add('live');
@@ -595,7 +612,16 @@ const live = {
     try { thumb = thumbnail(); } catch { return; }
     const prev = this.prevThumb; this.prevThumb = thumb;
     const still = !prev || meanAbsDiff(thumb, prev) < STILL_THRESHOLD;
-    let changed = !this.lastSent || meanAbsDiff(thumb, this.lastSent) >= SENSITIVITY[$('sensitivity').value];
+    const sens = SENSITIVITY[$('sensitivity').value];
+    let changed = !this.lastSent || meanAbsDiff(thumb, this.lastSent) >= sens;
+    let fine = null;
+    if (!changed && this.lastSentFine && tracker.items.length) {
+      // Whole frame unchanged: did anything change inside a tracked box (a smile, a hand)?
+      fine = fineThumbnail();
+      const sw = tracker.sw, sh = tracker.sh;
+      changed = tracker.items.some((it) => !it.lost && it.tpl && regionDiff(fine, this.lastSentFine,
+        { x: it.x / sw, y: it.y / sh, w: it.w / sw, h: it.h / sh }) >= sens * REGION_FACTOR);
+    }
     // "Nothing identifiable" is not an answer worth keeping: try the same view again after a moment.
     if (!changed && this.lastEmptyAt && Date.now() - this.lastEmptyAt > EMPTY_RETRY_MS) changed = true;
     if (!changed || !still) {
@@ -607,7 +633,7 @@ const live = {
     try {
       const blob = await captureJpeg(false);
       const resp = await postScan(blob, $('question').value.trim(), true);
-      this.lastSent = thumb; this.sent++;
+      this.lastSent = thumb; this.lastSentFine = fine || fineThumbnail(); this.sent++;
       this.lastEmptyAt = resp.result.objects.length ? 0 : Date.now();
       if (!resp.cached) { this.spent += resp.cost_usd; this.charges.push({ t: Date.now(), cost: resp.cost_usd }); }
       showResponse(resp);
@@ -630,7 +656,7 @@ document.addEventListener('visibilitychange', () => { if (live.on) setStatus(doc
 /* Test hook: lets an automated check drive the loop from a canvas instead of the camera. */
 window.lens = {
   setSource(el) { frameSource = el; fitStageTo(el.width, el.height); enableControls(); },
-  live, drawOverlay, postScan, meanAbsDiff, thumbnail, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse, setZoom, zoomState, cropRect, renderEntities,
+  live, drawOverlay, postScan, meanAbsDiff, thumbnail, fineThumbnail, regionDiff, SENSITIVITY, STILL_THRESHOLD, flipCamera, tracker, showResponse, setZoom, zoomState, cropRect, renderEntities,
 };
 
 startCamera();
