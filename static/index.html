@@ -42,6 +42,8 @@
   .card h3 small { font-weight: 400; color: var(--muted); font-size: 13px; }
   .meta { color: var(--muted); font-size: 13px; }
   .answer { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .sources { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .sources span { display: inline-block; background: #1f2e3b; color: var(--accent); border-radius: 999px; padding: 1px 8px; margin: 2px 4px 0 0; }
   .est { font-size: 13px; color: var(--muted); }
   .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
   .badge.cached { background: #1f3b2a; color: var(--ok); }
@@ -398,7 +400,11 @@ function renderCards(resp) {
     : `<span class="badge paid">${fmtUsd(resp.cost_usd)} · ${resp.latency_ms} ms</span>`)
     + (resp.escalated ? `<span class="badge esc" title="primary: ${escapeHtml(resp.primary_model)}">escalated → ${escapeHtml(resp.model.split(':').pop())}</span>` : '');
   let html = `<div class="scene">${escapeHtml(r.scene)} ${badge}</div>`;
-  if (r.answer) html += `<div class="card"><div class="answer">${escapeHtml(r.answer)}</div></div>`;
+  const sources = (r.sources || []).length
+    ? `<div class="sources">from your notes: ${r.sources.map((s) => `<span>${escapeHtml(s.file)} › ${escapeHtml(s.heading)}</span>`).join('')}</div>`
+    : '';
+  if (r.answer) html += `<div class="card"><div class="answer">${escapeHtml(r.answer)}</div>${sources}</div>`;
+  else if (sources) html += `<div class="card">${sources}</div>`;
   if (!r.objects.length) html += '<div class="empty">Nothing identifiable in this frame.</div>';
   r.objects.forEach((o, i) => {
     const e = (resp.entities || [])[i];

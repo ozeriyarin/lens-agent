@@ -37,11 +37,12 @@ import logging
 
 from pydantic_ai.exceptions import UserError
 
-from app.agent import MAX_QUESTION_CHARS, AgentFailed, build_agent
+from app.agent import MAX_QUESTION_CHARS, AgentFailed, build_agent, lookup_toolset
 from app.budget import Budget, BudgetExceeded, ModelStats, SpendEntry
 from app.config import Settings
 from app.embeddings import Embeddings, hashing_embed
 from app.gate import BadImage, ScanCache, prepare
+from app.kb import KnowledgeBase
 from app.memory import Entity, Memory
 from app.router import Router
 from app.schema import ScanResponse, ScanResult
@@ -62,6 +63,7 @@ class Services:
     router: Router
     model_name: str
     memory: Memory
+    kb: KnowledgeBase
 
 
 class StatsResponse(BaseModel):
@@ -69,6 +71,7 @@ class StatsResponse(BaseModel):
     escalation_model: str | None
     memory: bool
     entities: int
+    kb_passages: int
     cap_usd: float
     month_to_date_usd: float
     remaining_usd: float
@@ -133,10 +136,17 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         escalation, escalation_name = (None, "") if not isinstance(chosen_model, str) else _build_escalation(settings)
         # Memory (004): real embeddings with a real model, the offline hashing embedder otherwise,
         # so demo mode shows "known" badges without a key. Same SQLite file as the ledger.
-        embeddings = None
-        if settings.memory:
-            embeddings = (Embeddings(settings.embedding_model, budget) if isinstance(chosen_model, str)
-                          else Embeddings("hashing", budget, embed_fn=hashing_embed))
+        embeddings = (Embeddings(settings.embedding_model, budget) if isinstance(chosen_model, str)
+                      else Embeddings("hashing", budget, embed_fn=hashing_embed))
+        # Knowledge base (005): the owner's notes, indexed at startup (only changed files cost
+        # anything), searched by the lookup tool on tap scans with a question.
+        kb = KnowledgeBase(settings.db_path, embeddings, settings.kb_dir, floor=settings.kb_floor)
+        try:
+            stats = await kb.index()
+            if stats["files"]:
+                log.info("kb: %s notes, %s passages (%s re-indexed)", stats["files"], stats["passages"], stats["indexed"])
+        except Exception as e:  # a broken note must not stop the app
+            log.warning("kb indexing failed: %s", e)
         app.state.services = Services(
             settings=settings,
             budget=budget,
@@ -146,9 +156,11 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
                 build_agent(chosen_model), primary_name,
                 escalation, escalation_name,
                 escalate_below=settings.escalate_below,
+                toolset=lookup_toolset(kb) if kb.count() else None,
             ),
             model_name=primary_name,
-            memory=Memory(settings.db_path, embeddings, threshold=settings.memory_threshold),
+            memory=Memory(settings.db_path, embeddings if settings.memory else None, threshold=settings.memory_threshold),
+            kb=kb,
         )
         yield
 
@@ -244,6 +256,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             escalation_model=svc.router.escalation_model or None,
             memory=svc.memory.enabled,
             entities=svc.memory.count(),
+            kb_passages=svc.kb.count(),
             cap_usd=svc.budget.cap_usd,
             month_to_date_usd=svc.budget.month_to_date(),
             remaining_usd=svc.budget.remaining(),
