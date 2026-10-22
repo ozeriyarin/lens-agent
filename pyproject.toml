@@ -7,10 +7,10 @@ dependencies = [
     "pydantic>=2.11",
     "pydantic-ai-slim[google,anthropic]==2.59.0",
     "fastapi==0.156.8",
-    "uvicorn[standard]>=0.34",
+    "uvicorn>=0.34",
     "python-multipart>=0.0.20",
     "pillow==13.0.0",
-    "imagehash==4.3.2",
+    "numpy>=2.0",
     "python-dotenv>=1.1",
 ]
 

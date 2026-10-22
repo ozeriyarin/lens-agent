@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Generic, TypeVar
 
-import imagehash
+import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 MAX_SIDE = 1024
@@ -49,6 +49,57 @@ Image.MAX_IMAGE_PIXELS = MAX_PIXELS  # Pillow raises DecompressionBombError abov
 T = TypeVar("T")
 
 
+# --- perceptual hash ----------------------------------------------------------------------
+# Own implementation (feature 007 follow-up): the `imagehash` package did exactly this but
+# pulled scipy and PyWavelets (150 MB) into the image for one cosine transform. Same
+# algorithm, verified bit-identical on the test scenes: 32x32 greyscale, 2-D DCT-II, keep
+# the 8x8 low frequencies, 1 bit each for "above the median". 64 bits; Hamming distance
+# between two hashes is how different two scenes look.
+
+_HASH_SIZE = 8
+_HIGHFREQ_FACTOR = 4
+
+
+def _dct_matrix(n: int) -> np.ndarray:
+    k = np.arange(n)[:, None]
+    x = np.arange(n)[None, :]
+    return np.cos(np.pi * k * (2 * x + 1) / (2 * n))  # unnormalised DCT-II; scale is irrelevant
+
+
+_DCT = _dct_matrix(_HASH_SIZE * _HIGHFREQ_FACTOR)
+
+
+class PHash:
+    """64-bit perceptual hash. `a - b` is the Hamming distance (0 = same, 64 = opposite)."""
+
+    __slots__ = ("bits",)
+
+    def __init__(self, bits: np.ndarray) -> None:
+        self.bits = np.asarray(bits, dtype=bool).reshape(-1)
+
+    def __sub__(self, other: PHash) -> int:
+        return int(np.count_nonzero(self.bits != other.bits))
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, PHash) and bool(np.array_equal(self.bits, other.bits))
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+    def __str__(self) -> str:  # 16 hex chars, same encoding imagehash used
+        return "".join(f"{int(''.join('1' if b else '0' for b in self.bits[i:i + 4]), 2):x}" for i in range(0, 64, 4))
+
+    def __repr__(self) -> str:
+        return f"PHash({self})"
+
+
+def phash(img: Image.Image) -> PHash:
+    n = _HASH_SIZE * _HIGHFREQ_FACTOR
+    pixels = np.asarray(img.convert("L").resize((n, n), Image.Resampling.LANCZOS), dtype=np.float64)
+    low = (_DCT @ pixels @ _DCT.T)[:_HASH_SIZE, :_HASH_SIZE]
+    return PHash(low > np.median(low))
+
+
 class BadImage(ValueError):
     """The upload could not be decoded as an image."""
 
@@ -58,7 +109,7 @@ class PreparedFrame:
     """What leaves the gate: small JPEG bytes plus the hash that identifies the scene."""
 
     jpeg: bytes
-    phash: imagehash.ImageHash
+    phash: PHash
     width: int
     height: int
 
@@ -83,7 +134,7 @@ def prepare(raw: bytes) -> PreparedFrame:
 
     out = BytesIO()
     img.save(out, format="JPEG", quality=JPEG_QUALITY, optimize=True)
-    return PreparedFrame(jpeg=out.getvalue(), phash=imagehash.phash(img), width=img.width, height=img.height)
+    return PreparedFrame(jpeg=out.getvalue(), phash=phash(img), width=img.width, height=img.height)
 
 
 class ScanCache(Generic[T]):
@@ -94,7 +145,7 @@ class ScanCache(Generic[T]):
             raise ValueError("capacity must be >= 1")
         self.capacity = capacity
         self.max_distance = max_distance
-        self._items: OrderedDict[tuple[str, str], tuple[imagehash.ImageHash, T]] = OrderedDict()
+        self._items: OrderedDict[tuple[str, str], tuple[PHash, T]] = OrderedDict()
         self.hits = 0
         self.misses = 0
 
@@ -102,7 +153,7 @@ class ScanCache(Generic[T]):
     def _norm(question: str | None) -> str:
         return (question or "").strip().lower()
 
-    def lookup(self, phash: imagehash.ImageHash, question: str | None = None) -> T | None:
+    def lookup(self, phash: PHash, question: str | None = None) -> T | None:
         """Return the cached result for a near-identical frame with the same question, else None."""
         q = self._norm(question)
         for key, (stored_hash, result) in reversed(self._items.items()):  # most recent first
@@ -113,7 +164,7 @@ class ScanCache(Generic[T]):
         self.misses += 1
         return None
 
-    def store(self, phash: imagehash.ImageHash, question: str | None, result: T) -> None:
+    def store(self, phash: PHash, question: str | None, result: T) -> None:
         key = (str(phash), self._norm(question))
         self._items[key] = (phash, result)
         self._items.move_to_end(key)
