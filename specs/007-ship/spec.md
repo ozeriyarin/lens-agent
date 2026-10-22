@@ -1,6 +1,6 @@
 # Feature 007: Ship it — Docker Compose, CI, observability
 
-**Status**: Draft | **Created**: 2026-10-22
+**Status**: Done (2026-10-22; compose smoke test passed, CI run 39762021138 green on the first push) | **Created**: 2026-10-22
 
 ## Why
 The agent works on one laptop with a hand-started server. A reviewer (or the owner on a

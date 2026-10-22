@@ -33,11 +33,11 @@ Goal for the owner (Yarin): learn core AI-engineering concepts hands-on (agents,
 - **003 live-overlays** — live loop with changed-and-still gate, data drawn on the frame, template tracking between results, flip, zoom. *(done 2026-10-21)*
 - 003b (deferred) in-browser detector for 10-15 fps boxes, if live tracking still feels laggy
 
-Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RAG → 007 Docker/CI/observability → 008 Pi.
+Order from here (decided 2026-10-21): 006 evals → 004 entity memory → 005 RAG → 007 Docker/CI/observability → 008 Pi. All but 008 done by 2026-10-22.
 - **004 entity-memory** — identity per object, text embeddings under the budget, SQLite entity store with cosine linking, known badges, memory panel, identity metrics in evals. *(done 2026-10-22)*
 - **005 rag-lookup** — Markdown notes -> passages -> `lookup` tool on tap scans with a question; cited sources; eval source accuracy 3/3. *(done 2026-10-22)*
 - **006 evals** — labelled set (7 photos to start, bootstrap command to grow it), scorer, runner, compare; baseline recall 0.853. *(done 2026-10-21)*
-- 007 Docker Compose, CI, observability (traces, tokens, latency, cost)
+- **007 ship** — Dockerfile + Compose with a /data volume, CI (ruff, tests, image build), JSON scan events with X-Request-Id, optional Logfire tracing. *(done 2026-10-22; image 758 MB, scipy via imagehash is the follow-up)*
 - 008 Raspberry Pi client (optional)
 
 ## How to work in this repo
