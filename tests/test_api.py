@@ -19,7 +19,7 @@ from tests.test_gate import make_scene, recapture
 
 
 def make_client(tmp_path, model=None, cap=5.0):
-    settings = Settings(model="test:fake", budget_usd=cap, db_path=tmp_path / "ledger.db", cache_size=8)
+    settings = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=cap, db_path=tmp_path / "ledger.db", cache_size=8)
     app = create_app(settings, model=model or TestModel(custom_output_args=DESK))
     return TestClient(app), settings
 
@@ -138,7 +138,7 @@ def test_stats_reports_cap_and_spend(tmp_path):
 
 
 def test_token_guards_paid_endpoints_when_set(tmp_path):
-    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", scan_token="s3cret")
+    settings = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", scan_token="s3cret")
     client = TestClient(create_app(settings, model=TestModel(custom_output_args=DESK)))
     with client:
         assert client.get("/").status_code == 200  # the page itself is public; it holds no data
@@ -219,7 +219,7 @@ def desk_with_identity(identity="white ceramic mug, blue rim, chipped handle"):
 
 
 def test_scan_links_entities_and_second_scan_is_known(tmp_path):
-    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", cache_size=8, memory_threshold=0.65)
+    settings = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", cache_size=8, memory_threshold=0.65)
     client = TestClient(create_app(settings, model=desk_with_identity()))
     with client:
         first = post_scan(client, make_scene(21)).json()
@@ -242,7 +242,7 @@ def test_scan_links_entities_and_second_scan_is_known(tmp_path):
 
 
 def test_memory_off_gives_no_entities(tmp_path):
-    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", memory=False)
+    settings = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", memory=False)
     client = TestClient(create_app(settings, model=desk_with_identity()))
     with client:
         body = post_scan(client, make_scene(24)).json()
@@ -253,13 +253,13 @@ def test_memory_off_gives_no_entities(tmp_path):
 
 
 def test_memory_routes_refuse_remote_callers_without_a_token(tmp_path):
-    settings = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db")
+    settings = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db")
     client = TestClient(create_app(settings, model=desk_with_identity()))
     with client:
         assert client.get("/entities").status_code == 200  # local test client
         assert client.get("/entities", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 401  # via a proxy/tunnel
         assert client.delete("/entities", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 401
-    secured = Settings(model="test:fake", budget_usd=5.0, db_path=tmp_path / "s.db", scan_token="t0k")
+    secured = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=5.0, db_path=tmp_path / "s.db", scan_token="t0k")
     client = TestClient(create_app(secured, model=desk_with_identity()))
     with client:
         assert client.get("/entities", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 401
@@ -332,6 +332,12 @@ def test_remote_caller_without_token_gets_no_notes_or_memory_context(tmp_path):
         remote = post_scan(client, make_scene(43), question="water?", headers={"X-Forwarded-For": "203.0.113.9"})
         assert remote.status_code == 200
         assert seen["tools"] == [] and seen["memory_in_prompt"] is False  # no notes, no memory for strangers
-        # and a cached question-answer is not served to the stranger either
+        assert remote.json()["entities"] == []  # and no memory-derived fields, nothing written to memory
+        entities_before = client.get("/entities").json()
+        assert len(entities_before) == 1  # the stranger's scan did not add an entity
+        # the private caller's cached answer is not served to the stranger (separate caches)
         again = post_scan(client, make_scene(42), question="water?", headers={"X-Forwarded-For": "203.0.113.9"}).json()
         assert again["cached"] is False
+        # and the stranger's result is served from the public cache only
+        twice = post_scan(client, make_scene(43), question="water?", headers={"X-Forwarded-For": "203.0.113.9"}).json()
+        assert twice["cached"] is True and twice["entities"] == []

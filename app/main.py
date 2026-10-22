@@ -60,6 +60,7 @@ class Services:
     settings: Settings
     budget: Budget
     cache: ScanCache[ScanResponse]
+    public_cache: ScanCache[ScanResponse]  # for callers without access to memory/notes
     router: Router
     model_name: str
     memory: Memory
@@ -161,6 +162,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             settings=settings,
             budget=budget,
             cache=ScanCache(capacity=settings.cache_size),
+            public_cache=ScanCache(capacity=settings.cache_size),
             router=Router(
                 budget,
                 build_agent(chosen_model), primary_name,
@@ -225,15 +227,17 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         except BadImage as e:
             raise HTTPException(400, str(e)) from e
 
-        # Cached answers to questions may carry notes or memory: only private callers share them.
-        if (question is None or _private_caller(svc, request)) and \
-                (hit := svc.cache.lookup(frame.phash, question)) is not None:  # FR-4: free
+        # Private callers (token, or local machine) get memory and notes; others get a plain
+        # scan. The two populations never share a cache entry, so memory-derived fields and
+        # note-grounded answers cannot leak across (004/005 review).
+        private = _private_caller(svc, request)
+        cache = svc.cache if private else svc.public_cache
+        if (hit := cache.lookup(frame.phash, question)) is not None:  # FR-4: free
             return hit.model_copy(update={"cached": True, "cost_usd": 0.0, "latency_ms": 0})
 
         # The router does reserve -> scan -> settle/fail for each tier (001 FR-5/FR-6, 002 FR-1/FR-2).
         # Memory context (004 FR-6) and the lookup tool (005) are the owner's private data: only
         # callers that pass the same check as the memory routes get them.
-        private = _private_caller(svc, request)
         context = svc.memory.context() if (question and svc.memory.enabled and private) else None
         try:
             routed = await svc.router.run(frame, question, source=source, context=context or None, private=private)
@@ -244,7 +248,8 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             raise HTTPException(502, "the model could not produce a valid result; try again") from e
 
         # Memory (004): link detections to known entities. After the scan, never fatal.
-        entities = await svc.memory.link(routed.result, routed.request_id, source=source)
+        # Non-private callers neither read nor write memory.
+        entities = await svc.memory.link(routed.result, routed.request_id, source=source) if private else []
         response = ScanResponse(
             result=routed.result,
             cached=False,
@@ -259,7 +264,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         # An empty result ("nothing identifiable") is not cached: a repeated near-identical
         # frame deserves a fresh look, since blur or a bad exposure may have cleared by then.
         if not routed.result.is_empty:
-            svc.cache.store(frame.phash, question, response)
+            cache.store(frame.phash, question, response)
         return response
 
     @app.get("/stats", response_model=StatsResponse)
