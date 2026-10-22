@@ -3,3 +3,7 @@ __pycache__/
 *.db
 .venv/
 eval/ledger.db
+
+# Feature 005: the owner's notes stay private; only the README is committed
+kb/*
+!kb/README.md

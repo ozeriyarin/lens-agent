@@ -37,6 +37,9 @@ class Settings:
     memory: bool = True
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     memory_threshold: float = 0.86
+    # Feature 005: knowledge base of Markdown notes; the `lookup` tool searches it.
+    kb_dir: Path = Path("kb")
+    kb_floor: float = 0.3
 
     @classmethod
     def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
@@ -52,4 +55,6 @@ class Settings:
             memory=os.getenv("MEMORY", "on").strip().lower() not in ("off", "0", "false", "no"),
             embedding_model=os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip(),
             memory_threshold=float(os.getenv("MEMORY_THRESHOLD", "0.86")),
+            kb_dir=Path(os.getenv("KB_DIR", "kb")),
+            kb_floor=float(os.getenv("KB_FLOOR", "0.3")),
         )
