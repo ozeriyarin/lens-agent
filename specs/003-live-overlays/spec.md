@@ -81,6 +81,11 @@ per minute at the current send rate. Toggling Live off clears the overlay.
   on a finer thumbnail against the last sent frame; a change inside it (a smile in a face box, a
   hand on the mug) triggers a send even when the rest of the frame is unchanged. (Phone feedback:
   switching from neutral to smiling did not refresh the mood estimate.)
+- FR-17 **Faces refresh on a timer.** While the last result contains a person, a frame is sent
+  every 6 s even if the view is unchanged: expressions change without pixels moving much and
+  the person box usually spans the frame, so neither the global nor the in-box rule sees a smile.
+- FR-18 **Tracker drift cap.** A tracked box that moves more than a quarter of the frame from where
+  the model placed it is dropped (template matching wanders on blurry faces).
 - FR-13 **Fast scans.** Model "thinking" is off for scans and live frames ask for brief output
   (<= 6 objects, short scene): measured on the phone 2.1-2.8 s per frame instead of 4-13 s.
 

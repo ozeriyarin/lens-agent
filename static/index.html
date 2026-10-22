@@ -137,7 +137,14 @@ const THUMB_W = 16, THUMB_H = 12;
    on a finer 64x48 thumbnail, against the frame that was last sent. Region threshold is
    a fraction of the global one: the box is small, so noise averages out less. */
 const FINE_W = 64, FINE_H = 48;
-const REGION_FACTOR = 0.5;   // a change over ~10-15% of a box at full contrast scores ~15-20 here; medium sens -> 5
+const REGION_FACTOR = 0.5;
+/* People change without pixels moving much (a smile is ~2% of the frame and often outside
+   every tracked box, since the person box spans the frame). While a person is in the last
+   result, refresh on a timer so mood/age follow the face. ~10 frames/min at most. */
+const PERSON_REFRESH_MS = 6000;
+/* A tracked box that has drifted this far (fraction of the frame) from where the model put
+   it is dropped: template matching on a blurry face wanders, and a wrong box is worse than none. */
+const TRACK_MAX_DRIFT = 0.25;   // a change over ~10-15% of a box at full contrast scores ~15-20 here; medium sens -> 5
 const STALE_MS = 8000;            // overlay dims after this (003 FR-5); it is only replaced by the next result
 /* Tracker (003, "moving boxes"): between model results each box follows its object. On every
    result we remember a small grayscale crop of each box from the frame that was sent; a few
@@ -452,7 +459,7 @@ const tracker = {
       if (w * h > sw * sh * 0.6) { this.items.push({ o, x, y, w, h, tpl: null, lost: false }); continue; } // near-full-frame box: pin, don't track
       const tpl = new Uint8Array(w * h); let mean = 0;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const v = frame[Math.min(sh - 1, y + j) * sw + Math.min(sw - 1, x + i)]; tpl[j * w + i] = v; mean += v; }
-      this.items.push({ o, x, y, w, h, tpl, tplMean: mean / (w * h), lost: false });
+      this.items.push({ o, x, y, w, h, tpl, tplMean: mean / (w * h), lost: false, x0: x, y0: y });
     }
     this.sw = sw; this.sh = sh;
     if (!this.timer) this.timer = setInterval(() => this.step(), 1000 / TRACK_FPS);
@@ -485,6 +492,7 @@ const tracker = {
         if (sum / n < best) { best = sum / n; bx = x0; by = y0; }
       }
       if (best > TRACK_LOST || bx + it.w < 0 || by + it.h < 0 || bx > sw || by > sh) { it.lost = true; continue; }
+      if (Math.abs(bx - it.x0) > TRACK_MAX_DRIFT * sw || Math.abs(by - it.y0) > TRACK_MAX_DRIFT * sh) { it.lost = true; continue; }
       it.x = bx; it.y = by;
     }
     const tracked = new Map(this.items.map((it) => [it.o, it.lost ? null : { x: it.x / sw, y: it.y / sh, w: it.w / sw, h: it.h / sh }]));
@@ -590,7 +598,7 @@ againBtn.addEventListener('click', () => {
 
 /* --- live mode (003 FR-1, FR-3, FR-6) ---------------------------------------------------------- */
 const live = {
-  on: false, timer: null, inFlight: false, lastSent: null, lastSentFine: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0,
+  on: false, timer: null, inFlight: false, lastSent: null, lastSentFine: null, prevThumb: null, sent: 0, skipped: 0, lastEmptyAt: 0, lastSentAt: 0,
   spent: 0, charges: [],   // [{t, cost}] for the per-minute projection
   perMinute() { const cut = Date.now() - 60000; return this.charges.filter((c) => c.t > cut).reduce((a, c) => a + c.cost, 0); },
   start() {
@@ -630,16 +638,19 @@ const live = {
     }
     // "Nothing identifiable" is not an answer worth keeping: try the same view again after a moment.
     if (!changed && this.lastEmptyAt && Date.now() - this.lastEmptyAt > EMPTY_RETRY_MS) changed = true;
+    // A person in the last result: refresh on a timer so expressions are followed.
+    const personInFrame = lastResponse && lastResponse.result.objects.some((o) => o.category === 'person');
+    if (!changed && personInFrame && this.lastSentAt && Date.now() - this.lastSentAt > PERSON_REFRESH_MS) changed = true;
     if (!changed || !still) {
       this.skipped++;
-      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${still ? 'view unchanged, waiting' : 'moving…'}`);
+      setStatus(`Live: ${this.sent} sent, ${this.skipped} skipped · ${still ? (personInFrame ? 'unchanged · face refresh every 6 s' : 'view unchanged, waiting') : 'moving…'}`);
       return;
     }
     this.inFlight = true;
     try {
       const blob = await captureJpeg(false);
       const resp = await postScan(blob, $('question').value.trim(), true);
-      this.lastSent = thumb; this.lastSentFine = fine || fineThumbnail(); this.sent++;
+      this.lastSent = thumb; this.lastSentFine = fine || fineThumbnail(); this.sent++; this.lastSentAt = Date.now();
       this.lastEmptyAt = resp.result.objects.length ? 0 : Date.now();
       if (!resp.cached) { this.spent += resp.cost_usd; this.charges.push({ t: Date.now(), cost: resp.cost_usd }); }
       showResponse(resp);
