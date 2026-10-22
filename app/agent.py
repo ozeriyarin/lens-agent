@@ -19,7 +19,6 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-
 from typing import TYPE_CHECKING
 
 from pydantic_ai import Agent, BinaryContent
@@ -167,7 +166,7 @@ def _prompt(frame: PreparedFrame, question: str | None, brief: bool = False,
     return [text, BinaryContent(data=frame.jpeg, media_type=frame.media_type)]
 
 
-def lookup_toolset(kb: "KnowledgeBase") -> AbstractToolset:
+def lookup_toolset(kb: KnowledgeBase) -> AbstractToolset:
     """The `lookup` tool (005 FR-3): searches the owner's notes. Built per app, offered per run."""
 
     async def lookup(query: str) -> list[dict]:

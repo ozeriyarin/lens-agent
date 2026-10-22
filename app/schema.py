@@ -67,7 +67,7 @@ class BBox(BaseModel):
     h: float = Field(gt=0, le=1, description="HEIGHT as a fraction of image height (bottom edge = y + h). Not the bottom-edge coordinate.")
 
     @model_validator(mode="after")
-    def _inside_frame(self) -> "BBox":
+    def _inside_frame(self) -> BBox:
         if self.x + self.w > 1.0001 or self.y + self.h > 1.0001:
             raise ValueError("bbox extends outside the frame")
         return self
@@ -122,7 +122,7 @@ class DetectedObject(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _person_details_only_for_people(self) -> "DetectedObject":
+    def _person_details_only_for_people(self) -> DetectedObject:
         if self.person is not None and self.category != "person":
             raise ValueError("person details are only allowed when category == 'person'")
         if self.category == "person":
@@ -130,7 +130,7 @@ class DetectedObject(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _box_2d_to_bbox(self) -> "DetectedObject":
+    def _box_2d_to_bbox(self) -> DetectedObject:
         if self.box_2d is None:
             return self
         ymin, xmin, ymax, xmax = self.box_2d

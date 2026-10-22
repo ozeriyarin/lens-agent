@@ -327,7 +327,7 @@ def test_remote_caller_without_token_gets_no_notes_or_memory_context(tmp_path):
     client = TestClient(create_app(settings, model=FunctionModel(fake, model_name="fake")))
     with client:
         post_scan(client, make_scene(41), question="seen this?")  # local: memory gets an entity
-        local = post_scan(client, make_scene(42), question="water?")
+        post_scan(client, make_scene(42), question="water?")
         assert seen["tools"] == ["lookup"] and seen["memory_in_prompt"] is True
         remote = post_scan(client, make_scene(43), question="water?", headers={"X-Forwarded-For": "203.0.113.9"})
         assert remote.status_code == 200
@@ -341,3 +341,43 @@ def test_remote_caller_without_token_gets_no_notes_or_memory_context(tmp_path):
         # and the stranger's result is served from the public cache only
         twice = post_scan(client, make_scene(43), question="water?", headers={"X-Forwarded-For": "203.0.113.9"}).json()
         assert twice["cached"] is True and twice["entities"] == []
+
+
+# --- feature 007 -------------------------------------------------------------------
+
+
+def scan_events(caplog):
+    import json
+    return [json.loads(r.getMessage()) for r in caplog.records if r.name == "lens.events"]
+
+
+def test_scan_event_for_paid_cached_and_refused_requests(tmp_path, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="lens.events")
+    client, settings = make_client(tmp_path)
+    with client:
+        r = post_scan(client, make_scene(51), question="hello?")
+        assert r.headers["X-Request-Id"] == r.json()["request_id"]
+        again = post_scan(client, recapture(make_scene(51)), question="hello?")
+        assert again.headers["X-Request-Id"] == r.headers["X-Request-Id"]
+        client.post("/scan", content=b"x", headers={"Content-Type": "text/plain"})  # 415
+    paid, cached, refused = scan_events(caplog)
+    assert paid["event"] == "scan" and paid["status"] == 200 and paid["cached"] is False and paid["question"] is True
+    assert paid["request_id"] == r.json()["request_id"] and paid["model"] == "test"
+    assert paid["input_tokens"] > 0 and paid["cost_usd"] > 0 and paid["timings_ms"]["gate"] >= 0 and "model" in paid["timings_ms"]
+    assert "memory" in paid["timings_ms"] and paid["latency_ms"] >= paid["timings_ms"]["model"]
+    assert cached["cached"] is True and cached["request_id"] == paid["request_id"] and cached["cost_usd"] == 0
+    assert refused["status"] == 415 and refused["error"] and refused["cached"] is False
+
+
+def test_scan_event_on_budget_refusal(tmp_path, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="lens.events")
+    client, settings = make_client(tmp_path, cap=1.0)
+    Budget(settings.db_path, 1.0).record(model="test", input_tokens=0, output_tokens=0, latency_ms=0, cost_usd=0.999)
+    with client:
+        assert post_scan(client, make_scene(52)).status_code == 402
+    [ev] = scan_events(caplog)
+    assert ev["status"] == 402 and "budget" in ev["error"] and ev["timings_ms"].get("gate") is not None

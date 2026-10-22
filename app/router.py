@@ -46,6 +46,8 @@ class Routed:
     cost_usd: float  # both calls, including a failed escalation attempt
     latency_ms: int  # both calls
     request_id: str  # the primary call's ledger id; the cache key for the response
+    input_tokens: int = 0  # both calls (007: for the scan event)
+    output_tokens: int = 0
 
 
 def is_weak(result: ScanResult, question: str | None, threshold: float) -> bool:
@@ -128,6 +130,8 @@ class Router:
             cost_usd=entry.cost_usd,
             latency_ms=entry.latency_ms,
             request_id=entry.request_id,
+            input_tokens=entry.input_tokens,
+            output_tokens=entry.output_tokens,
         )
         if not self.enabled or not is_weak(outcome.result, question, self.escalate_below):
             return routed
@@ -153,6 +157,8 @@ class Router:
             cost_usd=entry.cost_usd + entry2.cost_usd,
             latency_ms=entry.latency_ms + entry2.latency_ms,
             request_id=entry.request_id,
+            input_tokens=entry.input_tokens + entry2.input_tokens,
+            output_tokens=entry.output_tokens + entry2.output_tokens,
         )
 
     def _last_failed_cost(self) -> float:

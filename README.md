@@ -1,5 +1,7 @@
 # lens-agent
 
+[![ci](https://github.com/ozeriyarin/lens-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ozeriyarin/lens-agent/actions/workflows/ci.yml)
+
 Point your phone camera at a scene, tap **Scan**, get a typed list of what's there:
 label, category, position, confidence, optional bounding box, and for people an
 *estimated* mood and age range. Ask a question about the scene and the answer lands
@@ -26,6 +28,17 @@ app/main.py  ──▶ gate.prepare   downscale to ≤1024px, perceptual hash   
 Non-negotiables (from the [constitution](.specify/memory/constitution.md)):
 typed outputs everywhere, a hard **5 USD/month** cap enforced in code, pay only for
 new information, raw frames never touch disk, tests for every gate.
+
+## Run it with Docker (one command)
+
+```bash
+cp .env.example .env          # fill in GOOGLE_API_KEY; optional ANTHROPIC_API_KEY, SCAN_TOKEN
+docker compose up --build     # http://localhost:8000
+```
+
+Without a `.env` the container runs in demo mode (`MODEL=test`). The ledger, memory and notes
+live in the `lens-data` volume (`/data`), so restarts and rebuilds keep them; drop notes into
+the volume's `kb/` or mount your own folder there.
 
 ## Run it
 
@@ -166,6 +179,24 @@ objects, answer accuracy, escalation rate, cost per photo, latency p50/p95, and 
 what was missed per photo. Rule: any change to the instructions, model settings, model strings,
 escalation threshold or schema is committed with the eval summary in the message.
 
+## Observability (feature 007)
+
+Every `/scan` writes one JSON line to the app log (`"event": "scan"`): request id, source,
+status, cached, model(s), escalated, tokens in/out, cost, total latency and per-step timings
+(gate, model, memory), entities linked, passages cited. The response carries the same id in
+`X-Request-Id`, and the ledger row has it too, so a log line, a ledger row and a trace join.
+
+```bash
+docker compose logs -f lens | grep '"event": "scan"'
+```
+
+Traces: set `LOGFIRE_TOKEN` (free tier at logfire.pydantic.dev) and `uv add logfire`; Pydantic AI
+and FastAPI are then instrumented and each model call shows as a span with its token usage.
+Without the token nothing is sent anywhere.
+
+CI (`.github/workflows/ci.yml`) runs ruff, the test suite with fake models (no keys, no spend)
+and a Docker build on every push.
+
 ## Cost model
 
 Before a scan the ledger reserves an estimate: the highest cost among the model's last 20
@@ -186,6 +217,8 @@ app/agent.py    build_agent(), scan()                        (Pydantic AI)
 app/router.py   is_weak(), Router.run()                      (cheap first, escalate once)
 app/memory.py   entities + sightings, link(), context()      (what the agent remembers)
 app/kb.py       notes -> passages -> search(); the lookup tool   (what the agent can look up)
+app/events.py   one JSON line per scan                           (what happened, how long, how much)
+app/tracing.py  Logfire behind LOGFIRE_TOKEN                    (spans per model call)
 app/embeddings.py embed() under the ledger                  
 app/evals.py    eval set, scorer, runner, bootstrap, compare   (measure the model)
 app/main.py     FastAPI composition, /scan, /stats           (the wiring)

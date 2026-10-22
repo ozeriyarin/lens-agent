@@ -35,7 +35,10 @@ free tier, with the model calls as spans.
 
 ## Functional requirements
 - FR-1 **Dockerfile.** `python:3.12-slim`, dependencies installed with `uv sync --frozen --no-dev`,
-  non-root user, `uvicorn app.main:app --host 0.0.0.0 --port 8000`. Image under ~300 MB.
+  non-root user, `uvicorn app.main:app --host 0.0.0.0 --port 8000`. Measured 758 MB: the venv is
+  376 MB, of which scipy (140 MB) is pulled in by imagehash for a single DCT. Follow-up: a numpy
+  pHash would drop scipy and PyWavelets. A first build was 1.27 GB because `chown -R /app`
+  duplicated the venv layer; fixed.
 - FR-2 **Compose.** `docker-compose.yml`: service `lens`, `env_file: .env` (optional), port 8000,
   a named volume mounted at `/data` holding the ledger (`DB_PATH=/data/lens.db`) and notes
   (`KB_DIR=/data/kb`), healthcheck on `/stats`, restart unless-stopped.

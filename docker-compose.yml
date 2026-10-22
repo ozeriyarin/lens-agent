@@ -1,0 +1,29 @@
+# lens-agent (feature 007)
+#   cp .env.example .env   # fill in GOOGLE_API_KEY (and ANTHROPIC_API_KEY, SCAN_TOKEN)
+#   docker compose up --build
+# Without a .env the container runs in demo mode (MODEL=test): the page works, no model is called.
+services:
+  lens:
+    build: .
+    image: lens-agent:local
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MODEL: ${MODEL:-test}
+      DB_PATH: /data/lens.db
+      KB_DIR: /data/kb
+    volumes:
+      - lens-data:/data          # ledger, memory, notes: survives restarts and rebuilds
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  lens-data:

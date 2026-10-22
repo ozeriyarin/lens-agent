@@ -8,7 +8,7 @@ survives a restart, and concurrent reservations cannot both squeeze through.
 
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -22,7 +22,7 @@ from app.budget import (
 
 GEMINI = "google:gemini-2.5-flash"
 HAIKU = "anthropic:claude-haiku-4-5"
-NOW = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -131,7 +131,7 @@ def test_concurrent_reservations_cannot_both_pass(tmp_path):
 
 
 def test_last_month_does_not_count(budget):
-    september = datetime(2026, 9, 30, 23, 59, tzinfo=timezone.utc)
+    september = datetime(2026, 9, 30, 23, 59, tzinfo=UTC)
     spend(budget, 5.0, now=september)
     assert budget.month_to_date(NOW) == 0.0
     assert budget.can_spend(5.0, NOW)
@@ -219,8 +219,9 @@ def test_estimate_ignores_failed_zero_cost_and_other_model_rows(budget):
 
 
 def test_estimate_uses_only_the_most_recent_window(budget):
-    from app.budget import CALIBRATION_SAFETY, CALIBRATION_WINDOW
     from datetime import timedelta
+
+    from app.budget import CALIBRATION_SAFETY, CALIBRATION_WINDOW
 
     for i in range(CALIBRATION_WINDOW + 5):
         spend(budget, 0.1 if i < 5 else 0.001, now=NOW + timedelta(seconds=i))  # old expensive rows first
@@ -272,5 +273,5 @@ def test_source_column_defaults_to_tap_and_is_migrated_for_old_ledgers(tmp_path)
     budget = Budget(path, cap_usd=5.0)
     assert budget.entries(NOW)[0].source == "tap"
     budget.reserve(GEMINI, 0.001, now=NOW, source="live")
-    esc = budget.reserve(HAIKU, 0.001, now=NOW, tier="escalation", source="live")
+    budget.reserve(HAIKU, 0.001, now=NOW, tier="escalation", source="live")
     assert budget.scans_by_source(NOW) == {"tap": 1, "live": 1}  # escalation rows are not scans

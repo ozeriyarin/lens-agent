@@ -1,7 +1,7 @@
 """Entity memory tests (feature 004): embeddings under the budget guard, the store, the
 linking rule with threshold/margin/rate limit, context for the prompt, forgetting."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -10,7 +10,7 @@ from app.embeddings import Embeddings, hashing_embed
 from app.memory import Memory
 from app.schema import DetectedObject, ScanResult
 
-NOW = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
 EMB = "google:gemini-embedding-001"
 
 
@@ -36,7 +36,7 @@ def memory(tmp_path, budget):
 async def test_hashing_embed_is_deterministic_and_similarity_makes_sense():
     (a, b, c), _ = await hashing_embed(["white ceramic mug, blue rim", "white ceramic mug with blue rim", "black laptop"])
     (a2,), _ = await hashing_embed(["white ceramic mug, blue rim"])
-    dot = lambda x, y: sum(p * q for p, q in zip(x, y))
+    dot = lambda x, y: sum(p * q for p, q in zip(x, y, strict=True))
     assert a == a2 and abs(dot(a, a) - 1) < 1e-6
     assert dot(a, b) > 0.6 > dot(a, c)
 

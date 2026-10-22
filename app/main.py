@@ -17,30 +17,30 @@ model and a temp database; `app` at the bottom is what uvicorn imports.
 """
 
 
+import logging
+import secrets
+import time
+import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
-
-import secrets
-
 from urllib.parse import unquote
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import UserError
 from pydantic_ai.models import Model
 
-import logging
-
-from pydantic_ai.exceptions import UserError
-
+from app import tracing
 from app.agent import MAX_QUESTION_CHARS, AgentFailed, build_agent, lookup_toolset
 from app.budget import Budget, BudgetExceeded, ModelStats, SpendEntry
 from app.config import Settings
 from app.embeddings import Embeddings, hashing_embed
+from app.events import ScanEvent, configure_logging
 from app.gate import BadImage, ScanCache, prepare
 from app.kb import KnowledgeBase
 from app.memory import Entity, Memory
@@ -135,6 +135,7 @@ def _demo_model() -> Model:
 
 def create_app(settings: Settings | None = None, model: str | Model | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    configure_logging()
     chosen_model = model if model is not None else settings.model
     if chosen_model == "test":
         chosen_model = _demo_model()
@@ -177,6 +178,7 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         yield
 
     app = FastAPI(title="lens-agent", version="0.1.0", lifespan=lifespan)
+    tracing.configure(app)  # 007 FR-5: Logfire spans when LOGFIRE_TOKEN is set, else no-op
 
     def services(request: Request, authorization: Annotated[str | None, Header()] = None) -> Services:
         """Resolve the shared services and, when SCAN_TOKEN is set, require it.
@@ -201,10 +203,30 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
     async def scan_frame(
         svc: Svc,
         request: Request,
+        response: Response,
         x_question: Annotated[str | None, Header(description="Optional question, URL-encoded UTF-8")] = None,
         x_live: Annotated[str | None, Header(description="'1' when sent by the live loop (feature 003)")] = None,
     ) -> ScanResponse:
+        # One scan event per request (007 FR-4), whatever the outcome; emitted in `finally`.
         source = "live" if x_live == "1" else "tap"
+        ev = ScanEvent(request_id=uuid.uuid4().hex, source=source, question=bool(x_question))
+        started = time.perf_counter()
+        try:
+            result = await _scan(svc, request, source, x_question, ev, started)
+            response.headers["X-Request-Id"] = result.request_id  # FR-6: joins log, ledger and trace
+            return result
+        except HTTPException as e:
+            ev.status, ev.error = e.status_code, str(e.detail)[:200]
+            raise
+        except Exception as e:
+            ev.status, ev.error = 500, type(e).__name__
+            raise
+        finally:
+            ev.latency_ms = int((time.perf_counter() - started) * 1000)
+            ev.emit()
+
+    async def _scan(svc: Services, request: Request, source: str, x_question: str | None,
+                    ev: ScanEvent, started: float) -> ScanResponse:
         # The frame is the raw request body, not a multipart form: Starlette spools
         # multipart parts over 1 MB to a temp file on disk, and constitution IV says raw
         # frames never touch disk. Reading the stream ourselves also lets us stop at the
@@ -226,19 +248,25 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
             frame = prepare(raw)  # FR-3: downscaled, in memory only
         except BadImage as e:
             raise HTTPException(400, str(e)) from e
+        ev.timings_ms["gate"] = int((time.perf_counter() - started) * 1000)
 
         # Private callers (token, or local machine) get memory and notes; others get a plain
         # scan. The two populations never share a cache entry, so memory-derived fields and
         # note-grounded answers cannot leak across (004/005 review).
         private = _private_caller(svc, request)
+        ev.private = private
         cache = svc.cache if private else svc.public_cache
         if (hit := cache.lookup(frame.phash, question)) is not None:  # FR-4: free
+            ev.cached, ev.request_id, ev.model, ev.primary_model = True, hit.request_id, hit.model, hit.primary_model
+            ev.entities, ev.known = len([e for e in hit.entities if e]), len([e for e in hit.entities if e and e.known])
+            ev.sources = len(hit.result.sources)
             return hit.model_copy(update={"cached": True, "cost_usd": 0.0, "latency_ms": 0})
 
         # The router does reserve -> scan -> settle/fail for each tier (001 FR-5/FR-6, 002 FR-1/FR-2).
         # Memory context (004 FR-6) and the lookup tool (005) are the owner's private data: only
         # callers that pass the same check as the memory routes get them.
         context = svc.memory.context() if (question and svc.memory.enabled and private) else None
+        t_model = time.perf_counter()
         try:
             routed = await svc.router.run(frame, question, source=source, context=context or None, private=private)
         except BudgetExceeded as e:
@@ -246,10 +274,17 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
         except AgentFailed as e:
             # Generic on purpose: the detail is in the server log (see agent.scan).
             raise HTTPException(502, "the model could not produce a valid result; try again") from e
+        ev.timings_ms["model"] = int((time.perf_counter() - t_model) * 1000)
+        ev.request_id, ev.model, ev.primary_model, ev.escalated = routed.request_id, routed.model, routed.primary_model, routed.escalated
+        ev.input_tokens, ev.output_tokens, ev.cost_usd = routed.input_tokens, routed.output_tokens, routed.cost_usd
+        ev.sources = len(routed.result.sources)
 
         # Memory (004): link detections to known entities. After the scan, never fatal.
         # Non-private callers neither read nor write memory.
+        t_mem = time.perf_counter()
         entities = await svc.memory.link(routed.result, routed.request_id, source=source) if private else []
+        ev.timings_ms["memory"] = int((time.perf_counter() - t_mem) * 1000)
+        ev.entities, ev.known = len([e for e in entities if e]), len([e for e in entities if e and e.known])
         response = ScanResponse(
             result=routed.result,
             cached=False,

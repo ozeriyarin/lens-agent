@@ -42,7 +42,7 @@ class Settings:
     kb_floor: float = 0.3
 
     @classmethod
-    def from_env(cls, dotenv_path: str | Path | None = None) -> "Settings":
+    def from_env(cls, dotenv_path: str | Path | None = None) -> Settings:
         load_dotenv(dotenv_path)  # no-op when there is no .env; never overrides real env vars
         return cls(
             model=os.getenv("MODEL", DEFAULT_MODEL),

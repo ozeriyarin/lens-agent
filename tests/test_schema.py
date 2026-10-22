@@ -1,6 +1,8 @@
 """Schema tests (constitution V). The schema is a contract, so we test the
 boundaries: what must be rejected, not only what is accepted."""
 
+from datetime import UTC
+
 import pytest
 from pydantic import ValidationError
 
@@ -114,11 +116,11 @@ def test_identity_is_kept_for_objects_and_dropped_for_people():
 
 
 def test_scan_response_entities_align_with_objects():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.schema import EntityRef, ScanResponse
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     r = ScanResponse(result=ScanResult(scene="s", objects=[DetectedObject(label="mug", category="other", confidence=0.9)]),
                      cached=False, request_id="r", model="m", primary_model="m", cost_usd=0, latency_ms=0,
                      entities=[EntityRef(id="e1", known=True, sightings=3, first_seen=now, last_seen=now, identity="white mug")])

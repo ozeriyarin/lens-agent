@@ -19,7 +19,7 @@ import sqlite3
 import uuid
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -48,7 +48,7 @@ class Entity:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _clean(text: str, limit: int) -> str:
@@ -139,7 +139,7 @@ class Memory:
         if vectors is None:
             return refs
         now = now or _utcnow()
-        for (i, o), vec in zip(candidates, vectors):
+        for (i, o), vec in zip(candidates, vectors, strict=True):
             try:
                 refs[i] = self._link_one(o, np.asarray(vec, dtype=np.float32), request_id, result.scene, now)
             except sqlite3.Error as e:  # memory must never fail a scan

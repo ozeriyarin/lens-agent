@@ -1,0 +1,45 @@
+# lens-agent CI (feature 007): lint, tests with fake models (no secrets, no spend), image build.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: ruff
+        run: uv run ruff check app tests
+      - name: tests (fake models only)
+        env:
+          PYDANTIC_AI_NO_BANNER: "1"
+        run: uv run pytest -q
+      - name: offline eval smoke (scorer + runner on generated images)
+        env:
+          PYDANTIC_AI_NO_BANNER: "1"
+        run: uv run pytest -q tests/test_evals.py
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: build (not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: lens-agent:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

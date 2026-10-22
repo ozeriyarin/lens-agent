@@ -105,8 +105,9 @@ async def test_live_frames_ask_for_brief_output(frame):
 
 
 def test_scan_settings_turn_thinking_off():
-    from app.agent import SCAN_MODEL_SETTINGS, build_agent
     from pydantic_ai.models.test import TestModel
+
+    from app.agent import SCAN_MODEL_SETTINGS, build_agent
 
     assert SCAN_MODEL_SETTINGS["thinking"] is False
     assert build_agent(TestModel()).model_settings == SCAN_MODEL_SETTINGS

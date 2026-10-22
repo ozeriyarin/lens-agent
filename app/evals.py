@@ -27,17 +27,16 @@ import re
 import statistics
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.models import Model
 
-from app.agent import INSTRUCTIONS, LIVE_HINT, SCAN_MODEL_SETTINGS, AgentFailed, build_agent
+from app.agent import INSTRUCTIONS, LIVE_HINT, SCAN_MODEL_SETTINGS, AgentFailed, build_agent, lookup_toolset
 from app.budget import Budget, BudgetExceeded
 from app.config import Settings
 from app.embeddings import Embeddings, hashing_embed
-from app.agent import lookup_toolset
 from app.gate import BadImage, prepare
 from app.kb import KnowledgeBase
 from app.memory import Memory
@@ -83,7 +82,7 @@ class EvalItem:
     draft: bool = False
 
     @classmethod
-    def from_json(cls, d: dict) -> "EvalItem":
+    def from_json(cls, d: dict) -> EvalItem:
         return cls(
             id=d["id"],
             file=d["file"],
@@ -409,7 +408,7 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
         pass  # Windows may still hold the file briefly; it is in the temp dir anyway
 
     report = {
-        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "tag": tag,
         "set": str(set_path),
         "set_size": len(items),
@@ -421,7 +420,7 @@ async def run(*, set_path: Path = DEFAULT_SET, photos: Path | None = None, model
     }
     if write:
         runs_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         out = runs_dir / f"{stamp}{'-' + tag if tag else ''}.json"
         out.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
         report["path"] = str(out)

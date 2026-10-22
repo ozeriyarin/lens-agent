@@ -18,8 +18,8 @@ from app.evals import (
     load_set,
     match,
     run,
-    score_photo,
     scorable,
+    score_photo,
     summarize,
 )
 from app.schema import BBox, DetectedObject, ScanResult
@@ -120,8 +120,8 @@ def test_load_set_parses_jsonl_skips_comments_and_drafts(tmp_path):
 
 def desk_model(labels=("laptop", "coffee mug")):
     return TestModel(custom_output_args={"scene": "a desk", "objects": [
-        {"label": l, "category": "electronics" if l == "laptop" else "other", "confidence": 0.9,
-         "box_2d": [200, 100, 600, 600] if l == "laptop" else None} for l in labels]})
+        {"label": lbl, "category": "electronics" if lbl == "laptop" else "other", "confidence": 0.9,
+         "box_2d": [200, 100, 600, 600] if lbl == "laptop" else None} for lbl in labels]})
 
 
 @pytest.fixture

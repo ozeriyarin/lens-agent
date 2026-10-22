@@ -1,0 +1,14 @@
+.git
+.venv
+.env
+*.db
+__pycache__
+.pytest_cache
+.claude
+.specify
+specs
+eval
+tests
+kb
+*.md
+!README.md

@@ -2,7 +2,7 @@
 a hit is cited, a miss is reported, an empty KB returns nothing, limits hold."""
 
 import pytest
-from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.agent import AgentFailed, build_agent, lookup_toolset, scan

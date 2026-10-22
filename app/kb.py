@@ -173,7 +173,7 @@ class KnowledgeBase:
                 continue
             with closing(self._connect()) as conn, conn:
                 conn.execute("DELETE FROM passages WHERE file = ?", (rel,))
-                for pos, ((heading, text), vec) in enumerate(zip(chunks, vectors)):
+                for pos, ((heading, text), vec) in enumerate(zip(chunks, vectors, strict=True)):
                     arr = np.asarray(vec, dtype=np.float32)
                     conn.execute(
                         "INSERT INTO passages (file, position, heading, text, embedding, dim, model, file_hash) "
@@ -202,7 +202,7 @@ class KnowledgeBase:
         with closing(self._connect()) as conn:
             rows = conn.execute("SELECT file, heading, text, embedding, dim FROM passages").fetchall()
         scored: list[Passage] = []
-        for file, heading, text, blob, dim in rows:
+        for file, heading, text, blob, _dim in rows:
             v = np.frombuffer(blob, dtype=np.float32)
             if v.shape[0] != q.shape[0]:
                 continue  # indexed with another embedding model: reindex to use it
