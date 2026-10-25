@@ -100,8 +100,13 @@ returned can be cited). The eval's three note questions were answered with the r
 A labelled set (JSONL, photos kept outside the repo), a scorer (alias matching, IoU on
 hand-checked boxes, answer and source checks, identity recall/precision) and a runner that
 drives the real router. Rule in `CLAUDE.md`: any prompt, model or schema change is committed
-with the eval numbers. Baseline recall 0.853 → 0.864 after adding identities → **0.900**
-after the lookup instructions, with 0 hallucinations from the forbid lists.
+with the eval numbers. On the first 7 photos: recall 0.853 → 0.864 after adding identities →
+0.900 after the lookup instructions. On the full set of **37 owner-labelled photos** (2026-10-25):
+recall **0.785**, 0 hallucinations from the forbid lists, IoU 0.69 on 30 hand-checked boxes,
+answers 5/5 and cited sources 3/3, identity recall 0.86 / precision 0.98 over 6 entity groups,
+0.0017 USD per photo. The misses are small or generic things the owner chose to label (sofa
+cushions, light switches, cables, "box"); the easy 7 flattered the model, which is exactly why
+the set had to grow. The harder number is the one in the README.
 
 ## 9. Privacy and the security reviews (001-005)
 

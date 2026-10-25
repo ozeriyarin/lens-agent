@@ -7,3 +7,6 @@ eval/ledger.db
 # Feature 005: the owner's notes stay private; only the README is committed
 kb/*
 !kb/README.md
+
+# editing copy of the eval set (expanded); pack it back into set.jsonl before use
+eval/set.edit.json

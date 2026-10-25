@@ -10,7 +10,8 @@ on the right card.
 A portfolio AI-engineering project built spec-first with
 [GitHub Spec Kit](https://github.com/github/spec-kit): typed outputs, cost control, routing,
 live mode with an on-device detector, entity memory, RAG lookup, evals, Docker and CI.
-**Start with [docs/decisions.md](docs/decisions.md)**: the decisions, with the numbers.
+**Start with [docs/decisions.md](docs/decisions.md)**: the decisions, with the numbers
+(latest eval: 37 photos, recall 0.785, 0 hallucinations, answers 5/5, cited sources 3/3).
 [CLAUDE.md](CLAUDE.md) has the roadmap; each feature lives under [specs/](specs/).
 
 ## How it works

@@ -1,0 +1,1154 @@
+{
+ "created": "2026-10-25T11:35:23+00:00",
+ "tag": "set-37",
+ "set": "eval\\set.jsonl",
+ "set_size": 37,
+ "model": "google:gemini-2.5-flash",
+ "escalation_model": "anthropic:claude-haiku-4-5",
+ "fingerprint": "63f8328f6f9a",
+ "summary": {
+  "photos": 37,
+  "errors": 0,
+  "mean_recall": 0.7847,
+  "identity_rate": 0.9856,
+  "entity_groups": 6,
+  "identity_recall": 0.8571,
+  "identity_precision": 0.9831,
+  "forbid_hit_rate": 0.0,
+  "iou_mean": 0.6859,
+  "iou_photos": 30,
+  "answer_accuracy": 1.0,
+  "source_accuracy": 1.0,
+  "lookups": 3,
+  "escalation_rate": 0.0,
+  "mean_cost_usd": 0.001713,
+  "total_cost_usd": 0.0634,
+  "latency_p50_ms": 2453,
+  "latency_p95_ms": 5609,
+  "failures": [
+   {
+    "id": "home-03",
+    "missed": [
+     "GO yogurt cup"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-05",
+    "missed": [
+     "humidity control"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-06",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-07",
+    "missed": [
+     "Heineken bottle",
+     "mustard container",
+     "yellow bottle"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-08",
+    "missed": [
+     "hand"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-14",
+    "missed": [
+     "window",
+     "window"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-17",
+    "missed": [
+     "cable",
+     "cable"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-18",
+    "missed": [
+     "balcony furniture"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-19",
+    "missed": [
+     "sectional sofa",
+     "power outlet",
+     "light switch",
+     "light switch"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-20",
+    "missed": [
+     "light switch"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-21",
+    "missed": [
+     "gas grill"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-22",
+    "missed": [
+     "exercise ball"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-23",
+    "missed": [
+     "kitchen towel",
+     "wooden board"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-25",
+    "missed": [
+     "soap dispenser",
+     "soap dispenser"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-26",
+    "missed": [
+     "trash bin"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-27",
+    "missed": [
+     "appliance"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-28",
+    "missed": [
+     "floor cleaner"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-31",
+    "missed": [
+     "diffuser"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-34",
+    "missed": [
+     "tissue holder"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-35",
+    "missed": [
+     "LG remote control"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-37",
+    "missed": [
+     "St. Dalfour jam jar",
+     "St. Dalfour jam jar",
+     "lemon juice bottle",
+     "box",
+     "box",
+     "box",
+     "box"
+    ],
+    "forbid_hits": [],
+    "error": null
+   }
+  ]
+ },
+ "photos": [
+  {
+   "id": "home-01",
+   "file": "home-01.jpg",
+   "expected": 9,
+   "matched": 9,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "spice shaker",
+    "green bottle",
+    "small dark bottle",
+    "small dark bottle"
+   ],
+   "recall": 1.0,
+   "iou_mean": 0.7316328625672873,
+   "answer_hit": true,
+   "latency_ms": 6384,
+   "cost_usd": 0.0033625,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "heineken": "756575f2b749",
+    "kinder": "7d9487b670d0",
+    "tahini": "1731e4fd23b1"
+   }
+  },
+  {
+   "id": "home-02",
+   "file": "home-02.jpg",
+   "expected": 8,
+   "matched": 8,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "jar of food",
+    "red container",
+    "black jar",
+    "sauce bottle",
+    "bottle",
+    "bottle",
+    "spoon",
+    "sauce bottle"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 6468,
+   "cost_usd": 0.0035629,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "milk-bottle": "72b90fb9b5fc",
+    "oat-carton": "ad7f3bf85b4d",
+    "heineken": "756575f2b749",
+    "kinder": "7d9487b670d0"
+   }
+  },
+  {
+   "id": "home-03",
+   "file": "home-03.jpg",
+   "expected": 3,
+   "matched": 2,
+   "missed": [
+    "GO yogurt cup"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.6666666666666666,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 4046,
+   "cost_usd": 0.0020758,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "produce.md › Produce (sample knowledge base for the evals) › Yogurt"
+   ],
+   "entity_links": {}
+  },
+  {
+   "id": "home-04",
+   "file": "home-04.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "yogurt cup"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 2776,
+   "cost_usd": 0.0016229,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-05",
+   "file": "home-05.jpg",
+   "expected": 5,
+   "matched": 4,
+   "missed": [
+    "humidity control"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.8,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 4139,
+   "cost_usd": 0.0023743999999999996,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "produce.md › Produce (sample knowledge base for the evals) › Eggplants"
+   ],
+   "entity_links": {}
+  },
+  {
+   "id": "home-06",
+   "file": "home-06.jpg",
+   "expected": 10,
+   "matched": 9,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "spice jar",
+    "yellow bottle"
+   ],
+   "recall": 0.9,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 5609,
+   "cost_usd": 0.0033425,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "house.md › House notes (sample knowledge base for the evals) › Beer"
+   ],
+   "entity_links": {
+    "milk-bottle": "72b90fb9b5fc",
+    "heineken": "756575f2b749",
+    "mustard": "1731e4fd23b1",
+    "oat-carton": "ad7f3bf85b4d"
+   }
+  },
+  {
+   "id": "home-07",
+   "file": "home-07.jpg",
+   "expected": 7,
+   "matched": 4,
+   "missed": [
+    "Heineken bottle",
+    "mustard container",
+    "yellow bottle"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "bottle",
+    "bottle",
+    "bottle",
+    "jar",
+    "container",
+    "container",
+    "bottle",
+    "box",
+    "container"
+   ],
+   "recall": 0.5714285714285714,
+   "iou_mean": 0.12862647827435003,
+   "answer_hit": true,
+   "latency_ms": 5499,
+   "cost_usd": 0.0036575,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "tahini": "a6c55451b622"
+   }
+  },
+  {
+   "id": "home-08",
+   "file": "home-08.jpg",
+   "expected": 3,
+   "matched": 2,
+   "missed": [
+    "hand"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "hand"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": 0.8608473606759464,
+   "answer_hit": null,
+   "latency_ms": 1954,
+   "cost_usd": 0.0012329,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 0.6666666666666666,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-09",
+   "file": "home-09.jpg",
+   "expected": 3,
+   "matched": 3,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7599918191642502,
+   "answer_hit": null,
+   "latency_ms": 1921,
+   "cost_usd": 0.0012329,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-10",
+   "file": "home-10.jpg",
+   "expected": 6,
+   "matched": 6,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "footrest"
+   ],
+   "recall": 1.0,
+   "iou_mean": 0.7157329347532557,
+   "answer_hit": null,
+   "latency_ms": 3120,
+   "cost_usd": 0.0019179000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-11",
+   "file": "home-11.jpg",
+   "expected": 1,
+   "matched": 1,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.9812925170068032,
+   "answer_hit": null,
+   "latency_ms": 1228,
+   "cost_usd": 0.0009454,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-12",
+   "file": "home-12.jpg",
+   "expected": 2,
+   "matched": 2,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.4715438727558634,
+   "answer_hit": null,
+   "latency_ms": 1841,
+   "cost_usd": 0.0010954,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-13",
+   "file": "home-13.jpg",
+   "expected": 2,
+   "matched": 2,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.6760222004455912,
+   "answer_hit": null,
+   "latency_ms": 1697,
+   "cost_usd": 0.0010904,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-14",
+   "file": "home-14.jpg",
+   "expected": 6,
+   "matched": 4,
+   "missed": [
+    "window",
+    "window"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "window",
+    "window"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": 0.6425285273244518,
+   "answer_hit": null,
+   "latency_ms": 2946,
+   "cost_usd": 0.0015854,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-15",
+   "file": "home-15.jpg",
+   "expected": 6,
+   "matched": 6,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.37848662462286103,
+   "answer_hit": null,
+   "latency_ms": 3202,
+   "cost_usd": 0.0017379000000000001,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-16",
+   "file": "home-16.jpg",
+   "expected": 2,
+   "matched": 2,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.72481118697479,
+   "answer_hit": null,
+   "latency_ms": 1455,
+   "cost_usd": 0.0009878999999999999,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-17",
+   "file": "home-17.jpg",
+   "expected": 5,
+   "matched": 3,
+   "missed": [
+    "cable",
+    "cable"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.6,
+   "iou_mean": 0.7964356667839249,
+   "answer_hit": null,
+   "latency_ms": 1868,
+   "cost_usd": 0.0011829000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-18",
+   "file": "home-18.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "balcony furniture"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "balcony sofa",
+    "balcony sofa",
+    "balcony table",
+    "air conditioner"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.6637427303132296,
+   "answer_hit": null,
+   "latency_ms": 3720,
+   "cost_usd": 0.0019204,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-19",
+   "file": "home-19.jpg",
+   "expected": 15,
+   "matched": 11,
+   "missed": [
+    "sectional sofa",
+    "power outlet",
+    "light switch",
+    "light switch"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "L-shaped sofa",
+    "cushion"
+   ],
+   "recall": 0.7333333333333333,
+   "iou_mean": 0.29825731621724966,
+   "answer_hit": null,
+   "latency_ms": 5577,
+   "cost_usd": 0.0028829000000000003,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-20",
+   "file": "home-20.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "light switch"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.75,
+   "iou_mean": 0.4824394367510278,
+   "answer_hit": null,
+   "latency_ms": 2036,
+   "cost_usd": 0.0012054000000000001,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-21",
+   "file": "home-21.jpg",
+   "expected": 3,
+   "matched": 2,
+   "missed": [
+    "gas grill"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "gas grill"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": 0.8473193473193473,
+   "answer_hit": null,
+   "latency_ms": 1974,
+   "cost_usd": 0.0012729,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-22",
+   "file": "home-22.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "exercise ball"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "exercise ball"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.9367942770752405,
+   "answer_hit": null,
+   "latency_ms": 2453,
+   "cost_usd": 0.0013229000000000001,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-23",
+   "file": "home-23.jpg",
+   "expected": 6,
+   "matched": 4,
+   "missed": [
+    "kitchen towel",
+    "wooden board"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "towel"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": 0.7636079140635759,
+   "answer_hit": null,
+   "latency_ms": 2912,
+   "cost_usd": 0.0015604000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-24",
+   "file": "home-24.jpg",
+   "expected": 5,
+   "matched": 5,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7156601432910623,
+   "answer_hit": null,
+   "latency_ms": 2335,
+   "cost_usd": 0.0014679,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 0.8,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-25",
+   "file": "home-25.jpg",
+   "expected": 12,
+   "matched": 10,
+   "missed": [
+    "soap dispenser",
+    "soap dispenser"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "pump bottle",
+    "pump bottle"
+   ],
+   "recall": 0.8333333333333334,
+   "iou_mean": 0.860876323855217,
+   "answer_hit": null,
+   "latency_ms": 4574,
+   "cost_usd": 0.0024929,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-26",
+   "file": "home-26.jpg",
+   "expected": 1,
+   "matched": 0,
+   "missed": [
+    "trash bin"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "refrigerator",
+    "storage container"
+   ],
+   "recall": 0.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 1778,
+   "cost_usd": 0.0010004,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-27",
+   "file": "home-27.jpg",
+   "expected": 2,
+   "matched": 1,
+   "missed": [
+    "appliance"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "air purifier"
+   ],
+   "recall": 0.5,
+   "iou_mean": 0.798777980142177,
+   "answer_hit": null,
+   "latency_ms": 1666,
+   "cost_usd": 0.0010254,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-28",
+   "file": "home-28.jpg",
+   "expected": 2,
+   "matched": 1,
+   "missed": [
+    "floor cleaner"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "stick vacuum cleaner"
+   ],
+   "recall": 0.5,
+   "iou_mean": 0.8926654740608229,
+   "answer_hit": null,
+   "latency_ms": 1584,
+   "cost_usd": 0.0010629,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-29",
+   "file": "home-29.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "light switch",
+    "vent"
+   ],
+   "recall": 1.0,
+   "iou_mean": 0.4935993612981907,
+   "answer_hit": null,
+   "latency_ms": 2701,
+   "cost_usd": 0.0016804,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-31",
+   "file": "home-31.jpg",
+   "expected": 5,
+   "matched": 4,
+   "missed": [
+    "diffuser"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "diffuser"
+   ],
+   "recall": 0.8,
+   "iou_mean": 0.2499559234246476,
+   "answer_hit": null,
+   "latency_ms": 2419,
+   "cost_usd": 0.0014379,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-32",
+   "file": "home-32.jpg",
+   "expected": 1,
+   "matched": 1,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 1.0,
+   "answer_hit": null,
+   "latency_ms": 1259,
+   "cost_usd": 0.0008654,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-34",
+   "file": "home-34.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "tissue holder"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "tissue box"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.6710845467673466,
+   "answer_hit": null,
+   "latency_ms": 2339,
+   "cost_usd": 0.0013804000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-35",
+   "file": "home-35.jpg",
+   "expected": 1,
+   "matched": 0,
+   "missed": [
+    "LG remote control"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "remote control"
+   ],
+   "recall": 0.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 1302,
+   "cost_usd": 0.0009203999999999999,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-36",
+   "file": "home-36.jpg",
+   "expected": 3,
+   "matched": 3,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.9237211819557011,
+   "answer_hit": null,
+   "latency_ms": 2264,
+   "cost_usd": 0.0013429000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-37",
+   "file": "home-37.jpg",
+   "expected": 13,
+   "matched": 6,
+   "missed": [
+    "St. Dalfour jam jar",
+    "St. Dalfour jam jar",
+    "lemon juice bottle",
+    "box",
+    "box",
+    "box",
+    "box"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "bottle",
+    "squeeze bottle",
+    "bottle",
+    "jar",
+    "box"
+   ],
+   "recall": 0.46153846153846156,
+   "iou_mean": 0.2389960255874107,
+   "answer_hit": null,
+   "latency_ms": 4906,
+   "cost_usd": 0.0025929,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-30",
+   "file": "home-30.jpg",
+   "expected": 5,
+   "matched": 5,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.9220816630581925,
+   "answer_hit": null,
+   "latency_ms": 2537,
+   "cost_usd": 0.0014954,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-33",
+   "file": "home-33.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.9506525324428431,
+   "answer_hit": null,
+   "latency_ms": 2529,
+   "cost_usd": 0.0014604000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  }
+ ]
+}

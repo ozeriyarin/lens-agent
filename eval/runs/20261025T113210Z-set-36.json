@@ -1,0 +1,1124 @@
+{
+ "created": "2026-10-25T11:32:10+00:00",
+ "tag": "set-36",
+ "set": "eval\\set.jsonl",
+ "set_size": 36,
+ "model": "google:gemini-2.5-flash",
+ "escalation_model": "anthropic:claude-haiku-4-5",
+ "fingerprint": "63f8328f6f9a",
+ "summary": {
+  "photos": 36,
+  "errors": 0,
+  "mean_recall": 0.7882,
+  "identity_rate": 0.9833,
+  "entity_groups": 6,
+  "identity_recall": 1.0,
+  "identity_precision": 1.0,
+  "forbid_hit_rate": 0.0,
+  "iou_mean": 0.6802,
+  "iou_photos": 29,
+  "answer_accuracy": 1.0,
+  "source_accuracy": 1.0,
+  "lookups": 3,
+  "escalation_rate": 0.0,
+  "mean_cost_usd": 0.00171,
+  "total_cost_usd": 0.06155,
+  "latency_p50_ms": 2580,
+  "latency_p95_ms": 6094,
+  "failures": [
+   {
+    "id": "home-01",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-05",
+    "missed": [
+     "humidity control"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-06",
+    "missed": [
+     "tahini jar"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-07",
+    "missed": [
+     "mustard container",
+     "yellow bottle"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-08",
+    "missed": [
+     "hand"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-15",
+    "missed": [
+     "window"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-17",
+    "missed": [
+     "cable",
+     "cable"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-18",
+    "missed": [
+     "balcony furniture"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-19",
+    "missed": [
+     "sectional sofa",
+     "cushion",
+     "cushion",
+     "cushion",
+     "cushion",
+     "cushion",
+     "light switch",
+     "light switch"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-20",
+    "missed": [
+     "light switch"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-21",
+    "missed": [
+     "gas grill"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-22",
+    "missed": [
+     "exercise ball"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-25",
+    "missed": [
+     "soap dispenser",
+     "soap dispenser",
+     "kitchen sink"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-26",
+    "missed": [
+     "trash bin"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-27",
+    "missed": [
+     "appliance"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-28",
+    "missed": [
+     "floor cleaner"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-35",
+    "missed": [
+     "LG remote control"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-37",
+    "missed": [
+     "St. Dalfour jam jar",
+     "St. Dalfour jam jar",
+     "lemon juice bottle",
+     "box",
+     "box",
+     "box"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-30",
+    "missed": [
+     "magnet"
+    ],
+    "forbid_hits": [],
+    "error": null
+   },
+   {
+    "id": "home-33",
+    "missed": [
+     "coffee table",
+     "cabinet"
+    ],
+    "forbid_hits": [],
+    "error": null
+   }
+  ]
+ },
+ "photos": [
+  {
+   "id": "home-01",
+   "file": "home-01.jpg",
+   "expected": 9,
+   "matched": 8,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "spice shaker",
+    "green bottle",
+    "yellow sauce bottle",
+    "dark bottle",
+    "dark bottle"
+   ],
+   "recall": 0.8888888888888888,
+   "iou_mean": 0.6483882311006374,
+   "answer_hit": true,
+   "latency_ms": 6793,
+   "cost_usd": 0.003305,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "heineken": "9d21b713cd0d",
+    "kinder": "e3331fb523ff"
+   }
+  },
+  {
+   "id": "home-02",
+   "file": "home-02.jpg",
+   "expected": 8,
+   "matched": 8,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "jar of food",
+    "bottle",
+    "bottle",
+    "sauce bottle",
+    "red container",
+    "jar"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 6094,
+   "cost_usd": 0.0032079,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "milk-bottle": "3be2b49c90c5",
+    "oat-carton": "213aed983903",
+    "heineken": "9d21b713cd0d",
+    "kinder": "e3331fb523ff"
+   }
+  },
+  {
+   "id": "home-03",
+   "file": "home-03.jpg",
+   "expected": 3,
+   "matched": 3,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 4217,
+   "cost_usd": 0.0022433,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "produce.md › Produce (sample knowledge base for the evals) › Yogurt"
+   ],
+   "entity_links": {}
+  },
+  {
+   "id": "home-04",
+   "file": "home-04.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "yogurt cup"
+   ],
+   "recall": 1.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 2951,
+   "cost_usd": 0.0015904,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-05",
+   "file": "home-05.jpg",
+   "expected": 5,
+   "matched": 4,
+   "missed": [
+    "humidity control"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.8,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 4530,
+   "cost_usd": 0.0023794,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "produce.md › Produce (sample knowledge base for the evals) › Eggplants"
+   ],
+   "entity_links": {}
+  },
+  {
+   "id": "home-06",
+   "file": "home-06.jpg",
+   "expected": 10,
+   "matched": 9,
+   "missed": [
+    "tahini jar"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "spice jar",
+    "sauce bottle",
+    "bottle",
+    "bottle"
+   ],
+   "recall": 0.9,
+   "iou_mean": null,
+   "answer_hit": true,
+   "latency_ms": 7854,
+   "cost_usd": 0.003695,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": true,
+   "sources": [
+    "house.md › House notes (sample knowledge base for the evals) › Beer"
+   ],
+   "entity_links": {
+    "milk-bottle": "3be2b49c90c5",
+    "heineken": "9d21b713cd0d",
+    "mustard": "819eb98a753a",
+    "oat-carton": "213aed983903"
+   }
+  },
+  {
+   "id": "home-07",
+   "file": "home-07.jpg",
+   "expected": 7,
+   "matched": 5,
+   "missed": [
+    "mustard container",
+    "yellow bottle"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "egg",
+    "jar",
+    "jar",
+    "jar",
+    "jar",
+    "box"
+   ],
+   "recall": 0.7142857142857143,
+   "iou_mean": 0.13287859325862608,
+   "answer_hit": true,
+   "latency_ms": 5131,
+   "cost_usd": 0.0031775,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {
+    "heineken": "9d21b713cd0d",
+    "tahini": "0df8f89f6711"
+   }
+  },
+  {
+   "id": "home-08",
+   "file": "home-08.jpg",
+   "expected": 3,
+   "matched": 2,
+   "missed": [
+    "hand"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "hand"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": 0.8342298501837049,
+   "answer_hit": null,
+   "latency_ms": 2109,
+   "cost_usd": 0.0012479000000000001,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-10",
+   "file": "home-10.jpg",
+   "expected": 6,
+   "matched": 6,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7103450056969054,
+   "answer_hit": null,
+   "latency_ms": 2998,
+   "cost_usd": 0.0017279,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-11",
+   "file": "home-11.jpg",
+   "expected": 1,
+   "matched": 1,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.9627924123167272,
+   "answer_hit": null,
+   "latency_ms": 1174,
+   "cost_usd": 0.0009179,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-12",
+   "file": "home-12.jpg",
+   "expected": 2,
+   "matched": 2,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.5149815772420105,
+   "answer_hit": null,
+   "latency_ms": 1897,
+   "cost_usd": 0.0011304000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-13",
+   "file": "home-13.jpg",
+   "expected": 2,
+   "matched": 2,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7354464929798863,
+   "answer_hit": null,
+   "latency_ms": 1864,
+   "cost_usd": 0.0010929000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-14",
+   "file": "home-14.jpg",
+   "expected": 6,
+   "matched": 6,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.6545928287579412,
+   "answer_hit": null,
+   "latency_ms": 2908,
+   "cost_usd": 0.0015729000000000001,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-15",
+   "file": "home-15.jpg",
+   "expected": 6,
+   "matched": 5,
+   "missed": [
+    "window"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "window"
+   ],
+   "recall": 0.8333333333333334,
+   "iou_mean": 0.4679164085786619,
+   "answer_hit": null,
+   "latency_ms": 3116,
+   "cost_usd": 0.0017154000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-16",
+   "file": "home-16.jpg",
+   "expected": 2,
+   "matched": 2,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7253809072801125,
+   "answer_hit": null,
+   "latency_ms": 1462,
+   "cost_usd": 0.0009854,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-17",
+   "file": "home-17.jpg",
+   "expected": 5,
+   "matched": 3,
+   "missed": [
+    "cable",
+    "cable"
+   ],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 0.6,
+   "iou_mean": 0.7597894475162885,
+   "answer_hit": null,
+   "latency_ms": 1985,
+   "cost_usd": 0.0011779000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-18",
+   "file": "home-18.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "balcony furniture"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "air conditioner",
+    "outdoor sofa",
+    "outdoor sofa",
+    "outdoor table"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.564599968003786,
+   "answer_hit": null,
+   "latency_ms": 3490,
+   "cost_usd": 0.0019179000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-19",
+   "file": "home-19.jpg",
+   "expected": 15,
+   "matched": 7,
+   "missed": [
+    "sectional sofa",
+    "cushion",
+    "cushion",
+    "cushion",
+    "cushion",
+    "cushion",
+    "light switch",
+    "light switch"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "sofa",
+    "throw pillow",
+    "throw pillow",
+    "throw pillow",
+    "throw pillow",
+    "throw pillow"
+   ],
+   "recall": 0.4666666666666667,
+   "iou_mean": 0.4276663052550865,
+   "answer_hit": null,
+   "latency_ms": 5508,
+   "cost_usd": 0.0028954000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-20",
+   "file": "home-20.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "light switch"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "plant"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.4461367828626572,
+   "answer_hit": null,
+   "latency_ms": 2567,
+   "cost_usd": 0.0014054,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-21",
+   "file": "home-21.jpg",
+   "expected": 3,
+   "matched": 2,
+   "missed": [
+    "gas grill"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "gas grill"
+   ],
+   "recall": 0.6666666666666666,
+   "iou_mean": 0.7309110522702758,
+   "answer_hit": null,
+   "latency_ms": 1956,
+   "cost_usd": 0.0012129,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-22",
+   "file": "home-22.jpg",
+   "expected": 4,
+   "matched": 3,
+   "missed": [
+    "exercise ball"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "exercise ball"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.8998079411087078,
+   "answer_hit": null,
+   "latency_ms": 2580,
+   "cost_usd": 0.0013304,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-23",
+   "file": "home-23.jpg",
+   "expected": 6,
+   "matched": 6,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7957856110092559,
+   "answer_hit": null,
+   "latency_ms": 3187,
+   "cost_usd": 0.0016854,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-24",
+   "file": "home-24.jpg",
+   "expected": 5,
+   "matched": 5,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.7847731508976085,
+   "answer_hit": null,
+   "latency_ms": 2490,
+   "cost_usd": 0.0014329000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 0.4,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-25",
+   "file": "home-25.jpg",
+   "expected": 12,
+   "matched": 9,
+   "missed": [
+    "soap dispenser",
+    "soap dispenser",
+    "kitchen sink"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "pump bottle",
+    "pump bottle",
+    "dish drying rack",
+    "sink"
+   ],
+   "recall": 0.75,
+   "iou_mean": 0.863902165958121,
+   "answer_hit": null,
+   "latency_ms": 5142,
+   "cost_usd": 0.0026579,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-26",
+   "file": "home-26.jpg",
+   "expected": 1,
+   "matched": 0,
+   "missed": [
+    "trash bin"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "refrigerator",
+    "storage container"
+   ],
+   "recall": 0.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 1660,
+   "cost_usd": 0.0010254,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-27",
+   "file": "home-27.jpg",
+   "expected": 2,
+   "matched": 1,
+   "missed": [
+    "appliance"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "air purifier"
+   ],
+   "recall": 0.5,
+   "iou_mean": 0.7836259886756703,
+   "answer_hit": null,
+   "latency_ms": 1698,
+   "cost_usd": 0.0010529,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-28",
+   "file": "home-28.jpg",
+   "expected": 2,
+   "matched": 1,
+   "missed": [
+    "floor cleaner"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "stick vacuum cleaner"
+   ],
+   "recall": 0.5,
+   "iou_mean": 0.7137745974955275,
+   "answer_hit": null,
+   "latency_ms": 1674,
+   "cost_usd": 0.0010629,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-29",
+   "file": "home-29.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.5298397389573811,
+   "answer_hit": null,
+   "latency_ms": 2420,
+   "cost_usd": 0.0013354,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-31",
+   "file": "home-31.jpg",
+   "expected": 5,
+   "matched": 5,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [
+    "cables"
+   ],
+   "recall": 1.0,
+   "iou_mean": 0.25980071704460467,
+   "answer_hit": null,
+   "latency_ms": 2900,
+   "cost_usd": 0.0016254000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-32",
+   "file": "home-32.jpg",
+   "expected": 1,
+   "matched": 1,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 1.0,
+   "answer_hit": null,
+   "latency_ms": 1234,
+   "cost_usd": 0.0008654,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-34",
+   "file": "home-34.jpg",
+   "expected": 4,
+   "matched": 4,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.8151076774085382,
+   "answer_hit": null,
+   "latency_ms": 2410,
+   "cost_usd": 0.0013704000000000001,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-35",
+   "file": "home-35.jpg",
+   "expected": 1,
+   "matched": 0,
+   "missed": [
+    "LG remote control"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "remote control"
+   ],
+   "recall": 0.0,
+   "iou_mean": null,
+   "answer_hit": null,
+   "latency_ms": 1427,
+   "cost_usd": 0.0009279,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-36",
+   "file": "home-36.jpg",
+   "expected": 3,
+   "matched": 3,
+   "missed": [],
+   "forbid_hits": [],
+   "extras": [],
+   "recall": 1.0,
+   "iou_mean": 0.975063217272904,
+   "answer_hit": null,
+   "latency_ms": 2318,
+   "cost_usd": 0.0013429000000000002,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-37",
+   "file": "home-37.jpg",
+   "expected": 13,
+   "matched": 7,
+   "missed": [
+    "St. Dalfour jam jar",
+    "St. Dalfour jam jar",
+    "lemon juice bottle",
+    "box",
+    "box",
+    "box"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "bottle",
+    "bottle"
+   ],
+   "recall": 0.5384615384615384,
+   "iou_mean": 0.45157951041910555,
+   "answer_hit": null,
+   "latency_ms": 4006,
+   "cost_usd": 0.0022529,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-30",
+   "file": "home-30.jpg",
+   "expected": 5,
+   "matched": 4,
+   "missed": [
+    "magnet"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "magnets"
+   ],
+   "recall": 0.8,
+   "iou_mean": 0.975819572964973,
+   "answer_hit": null,
+   "latency_ms": 3087,
+   "cost_usd": 0.0015104,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  },
+  {
+   "id": "home-33",
+   "file": "home-33.jpg",
+   "expected": 4,
+   "matched": 2,
+   "missed": [
+    "coffee table",
+    "cabinet"
+   ],
+   "forbid_hits": [],
+   "extras": [
+    "round table",
+    "round table"
+   ],
+   "recall": 0.5,
+   "iou_mean": 0.5596841472971875,
+   "answer_hit": null,
+   "latency_ms": 2574,
+   "cost_usd": 0.0014679,
+   "escalated": false,
+   "model": "google:gemini-2.5-flash",
+   "error": null,
+   "identity_rate": 1.0,
+   "source_hit": null,
+   "sources": [],
+   "entity_links": {}
+  }
+ ]
+}
