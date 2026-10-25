@@ -130,7 +130,8 @@ server is now on Fly.io at <https://lens-agent.fly.dev>: one `shared-cpu-1x` 512
 nobody scans. Vercel was out (no long-running process, no disk); Render would have cost about
 7.25 USD/month (Starter plus disk) against Fly's 0.5 to 3.5 USD depending on use. That bill is
 separate from the 5 USD/month API cap. The non-root image needed no change because Fly chowns
-the volume to the image's `USER`. Setup and rollback are in [deploy.md](deploy.md).
+the volume to the image's `USER`. First phone scan against the live server passed the same
+day. Setup and rollback are in [deploy.md](deploy.md).
 
 ## What I would do next
 
