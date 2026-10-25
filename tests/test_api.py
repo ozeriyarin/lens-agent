@@ -151,6 +151,17 @@ def test_token_guards_paid_endpoints_when_set(tmp_path):
         assert len(Budget(settings.db_path, 5).entries()) == 1  # the 401s cost nothing
 
 
+def test_health_is_public_and_names_the_model(tmp_path):
+    settings = Settings(kb_dir=tmp_path / "nokb", model="test:fake", budget_usd=5.0, db_path=tmp_path / "l.db", scan_token="s3cret")
+    client = TestClient(create_app(settings, model=TestModel(custom_output_args=DESK)))
+    with client:
+        r = client.get("/health")  # no token: the host's health checker cannot send one
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "ok" and body["model"] and "version" in body
+        assert "cap_usd" not in body and "month_to_date_usd" not in body  # spend stays behind /stats
+
+
 def test_index_serves_the_pwa(tmp_path):
     client, _ = make_client(tmp_path)
     with client:

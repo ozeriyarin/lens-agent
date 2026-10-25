@@ -348,6 +348,14 @@ def create_app(settings: Settings | None = None, model: str | Model | None = Non
     def forget_all_entities(svc: Mem) -> dict[str, int]:
         return {"forgotten": svc.memory.forget_all()}
 
+    @app.get("/health", include_in_schema=False)
+    def health(request: Request) -> dict[str, str]:
+        """Liveness for the host's health check (007/deploy). No token: it reveals only that the
+        app finished startup (services exist) and which model it runs; the cap and spend stay
+        behind `/stats`."""
+        svc: Services = request.app.state.services
+        return {"status": "ok", "model": svc.model_name, "version": app.version}
+
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")

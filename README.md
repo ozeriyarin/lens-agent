@@ -73,7 +73,8 @@ uv run uvicorn app.main:app --port 8000
 |---|---|---|
 | `MODEL` | `google:gemini-2.5-flash` | Pydantic AI model string. `anthropic:claude-haiku-4-5` for the escalation tier, `test` for demo mode. |
 | `BUDGET_USD` | `5` | Monthly cap. A scan that would exceed it gets HTTP 402 and no model call. |
-| `DB_PATH` | `lens.db` | SQLite spend ledger (gitignored). |
+| `DB_PATH` | `lens.db` | SQLite spend ledger, memory and note index (gitignored). `/data/lens.db` in Docker and on Fly. |
+| `KB_DIR` | `kb` | Folder of Markdown notes for the lookup tool. `/data/kb` in Docker and on Fly. |
 | `SCAN_TOKEN` | empty | Shared secret for `/scan` and `/stats`. **Set it before tunnelling.** |
 | `CACHE_SIZE` | `32` | How many recent scenes the dedupe cache remembers. |
 
@@ -99,7 +100,16 @@ refuses *regardless* of the code. You want both.
 
 ### 3. On the phone
 
-Browsers only expose the camera over HTTPS, so expose localhost through a tunnel:
+Browsers only expose the camera over HTTPS. Two ways to get it:
+
+**Live server (Fly.io).** The repo ships `fly.toml`; [docs/deploy.md](docs/deploy.md) has the
+eight commands to create the app, the 1 GB volume at `/data` and the secrets, and how to roll
+back. Hosting cost: a `shared-cpu-1x` 512 MB machine that stops itself when idle, about
+0.5 to 3.5 USD/month depending on use, plus 0.15 USD for the volume. That is **on top of** the
+5 USD/month cap in the constitution, which covers model (API) spend only. Vercel does not fit
+(no long-running process, no disk); Render would be about 7.25 USD/month for the same thing.
+
+**Tunnel from the laptop.** For a one-off session, expose localhost instead:
 
 ```bash
 cloudflared tunnel --url http://localhost:8000
@@ -118,6 +128,7 @@ local storage and strips it from the address bar. Allow camera access, point, ta
   → `ScanResponse` `{result, cached, request_id, model, primary_model, escalated, cost_usd, latency_ms}`.
   Errors: 400 bad image, 401 token, 402 budget reached, 413 too large, 415 not an image body, 502 model failed.
 - `GET /stats` cap, month-to-date, remaining, cache hit/miss counters, recent ledger rows.
+- `GET /health` `{status, model, version}`, no token: the host's liveness probe.
 - `GET /` the PWA. Interactive API docs at `/docs`.
 
 ## Routing (feature 002)

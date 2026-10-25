@@ -124,6 +124,14 @@ tokens and cost joined to the ledger by `X-Request-Id`, optional Logfire tracing
 went 1.27 GB → 758 MB (a `chown -R` had duplicated the venv layer) → **447 MB** (numpy hash,
 no uvicorn extras, two-stage build).
 
+**Live (2026-10-25).** Until now the phone reached the laptop through an ngrok tunnel. The
+server is now on Fly.io: one `shared-cpu-1x` 512 MB machine built from the same Dockerfile, a
+1 GB volume at `/data`, HTTPS from Fly, `/health` as the probe, and the machine stopped while
+nobody scans. Vercel was out (no long-running process, no disk); Render would have cost about
+7.25 USD/month (Starter plus disk) against Fly's 0.5 to 3.5 USD depending on use. That bill is
+separate from the 5 USD/month API cap. The non-root image needed no change because Fly chowns
+the volume to the image's `USER`. Setup and rollback are in [deploy.md](deploy.md).
+
 ## What I would do next
 
 Grow the eval set past seven photos; swap text-identity for image embeddings if look-alike

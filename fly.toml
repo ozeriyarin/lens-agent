@@ -1,0 +1,41 @@
+# lens-agent on Fly.io (see docs/deploy.md). One small machine, one 1 GB volume at /data,
+# HTTPS and a certificate from Fly, the machine stopped while nobody scans.
+#
+# `app` must be globally unique on Fly: `fly launch --copy-config --no-deploy` lets you pick
+# another name and rewrites this line.
+app = "lens-agent"
+primary_region = "fra"   # Frankfurt: nearest Fly region to Israel; change if you move
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MODEL = "google:gemini-2.5-flash"
+  BUDGET_USD = "5"
+  DB_PATH = "/data/lens.db"   # the Dockerfile sets the same; repeated here so the mount path is visible
+  KB_DIR = "/data/kb"
+  # Secrets (GOOGLE_API_KEY, ANTHROPIC_API_KEY, SCAN_TOKEN, LOGFIRE_TOKEN) are set with
+  # `fly secrets set`, never here: this file is committed.
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"    # a stopped machine costs only its rootfs storage (cents)
+  auto_start_machines = true     # the first request after a pause wakes it (a few seconds)
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
+
+[[mounts]]
+  source = "lens_data"           # `fly volumes create lens_data --size 1`
+  destination = "/data"          # ledger (lens.db), entity memory, kb/ notes
+  initial_size = "1gb"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"               # numpy + Pillow + the agent sit around 200 MB; 256 MB is too tight
