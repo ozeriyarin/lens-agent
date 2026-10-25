@@ -118,7 +118,7 @@ instructions declare as data. Every review finding and its fix is in the commit 
 
 ## 10. Shipping (007)
 
-`docker compose up`, a `/data` volume for ledger, memory and notes, CI (ruff, 145 tests with
+`docker compose up`, a `/data` volume for ledger, memory and notes, CI (ruff, 146 tests with
 fake models, image build) green on the first push, one JSON event line per scan with timings,
 tokens and cost joined to the ledger by `X-Request-Id`, optional Logfire tracing. The image
 went 1.27 GB → 758 MB (a `chown -R` had duplicated the venv layer) → **447 MB** (numpy hash,
