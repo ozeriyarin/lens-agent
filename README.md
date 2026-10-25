@@ -102,7 +102,8 @@ refuses *regardless* of the code. You want both.
 
 Browsers only expose the camera over HTTPS. Two ways to get it:
 
-**Live server (Fly.io).** The repo ships `fly.toml`; [docs/deploy.md](docs/deploy.md) has the
+**Live server (Fly.io).** Running at <https://lens-agent.fly.dev> since 2026-10-25
+(`/health` is public; scans need the token). The repo ships `fly.toml`; [docs/deploy.md](docs/deploy.md) has the
 eight commands to create the app, the 1 GB volume at `/data` and the secrets, and how to roll
 back. Hosting cost: a `shared-cpu-1x` 512 MB machine that stops itself when idle, about
 0.5 to 3.5 USD/month depending on use, plus 0.15 USD for the volume. That is **on top of** the

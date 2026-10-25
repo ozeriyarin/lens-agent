@@ -125,7 +125,7 @@ went 1.27 GB → 758 MB (a `chown -R` had duplicated the venv layer) → **447 M
 no uvicorn extras, two-stage build).
 
 **Live (2026-10-25).** Until now the phone reached the laptop through an ngrok tunnel. The
-server is now on Fly.io: one `shared-cpu-1x` 512 MB machine built from the same Dockerfile, a
+server is now on Fly.io at <https://lens-agent.fly.dev>: one `shared-cpu-1x` 512 MB machine built from the same Dockerfile, a
 1 GB volume at `/data`, HTTPS from Fly, `/health` as the probe, and the machine stopped while
 nobody scans. Vercel was out (no long-running process, no disk); Render would have cost about
 7.25 USD/month (Starter plus disk) against Fly's 0.5 to 3.5 USD depending on use. That bill is

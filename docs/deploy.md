@@ -1,5 +1,8 @@
 # Deploying lens-agent (Fly.io)
 
+Live since 2026-10-25 at <https://lens-agent.fly.dev> (app `lens-agent`, region `fra`,
+volume `lens_data`).
+
 The server runs as one Docker container on [Fly.io](https://fly.io): a public HTTPS URL
 (the phone camera needs HTTPS), a 1 GB persistent volume at `/data` for the SQLite ledger,
 the entity memory and the `kb/` notes, and a machine that stops itself when nobody is
